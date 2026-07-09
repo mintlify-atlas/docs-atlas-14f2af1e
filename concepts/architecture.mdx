@@ -16,7 +16,7 @@ Normalize     → _templates, skills/wiki-ingest
 Classify      → wiki/sources, entities, concepts, projects, comparisons
 Evidence      → report.zip, security-audit-report.json, evidence index
 Governance    → BUNKER_RULES, ADR template, knowledge supply chain
-Automation    → bin/ (sync ops) + n8n (async flows, alerts, DLQ)
+Automation    → bin/ (Sync ops) + n8n (Async flows, alerts, DLQ)
 Retrieval     → BM25 index (pure Python, zero deps) + OpenCode synthesis
 Testing       → 5 suites: workflows n8n, wiki integrity, scripts, YAML, retrieve
 Agent Runtime → agents, commands, skills (13), hooks (7)
@@ -24,34 +24,34 @@ Visualization → dashboard, canvases, Obsidian graph
 ```
 
 <CardGroup cols={2}>
-  <Card title="Layer 1 — Capture" icon="inbox">
+  <Card title="Layer 1 — Capture" icon="inbox" href="concepts/vault-structure">
     Raw sources land in `.raw/` (immutable), `wiki/inbox/`, or arrive via the ingest server at `127.0.0.1:9090`. Handover files preserve cross-session context.
   </Card>
-  <Card title="Layer 2 — Normalize" icon="wand-magic-sparkles">
+  <Card title="Layer 2 — Normalize" icon="wand-magic-sparkles" href="skills/wiki-ingest">
     The `wiki-ingest` skill and `_templates/` directory transform raw content into structured Markdown pages with YAML frontmatter.
   </Card>
-  <Card title="Layer 3 — Classify" icon="tags">
+  <Card title="Layer 3 — Classify" icon="tags" href="concepts/vault-structure">
     Normalized content is routed to `wiki/sources/`, `wiki/entities/`, `wiki/concepts/`, `wiki/projects/`, or `wiki/comparisons/` based on content type.
   </Card>
-  <Card title="Layer 4 — Evidence" icon="shield-check">
+  <Card title="Layer 4 — Evidence" icon="shield-check" href="skills/evidence-index">
     Security artifacts (`report.zip`, `security-audit-report.json`) are indexed with SHA256 checksums via the `evidence-index` skill and `bin/evidence-index.sh`.
   </Card>
-  <Card title="Layer 5 — Governance" icon="scale-balanced">
+  <Card title="Layer 5 — Governance" icon="scale-balanced" href="concepts/architecture">
     `BUNKER_RULES.md` defines the ADR lifecycle, note quality standards (100+ lines for core concepts), and the knowledge supply chain.
   </Card>
-  <Card title="Layer 6 — Automation" icon="robot">
+  <Card title="Layer 6 — Automation" icon="robot" href="automation/n8n-overview">
     Synchronous operations run through `bin/` shell scripts. Asynchronous pipelines, alerts, and the Dead Letter Queue run through n8n on Docker.
   </Card>
-  <Card title="Layer 7 — Retrieval" icon="magnifying-glass">
+  <Card title="Layer 7 — Retrieval" icon="magnifying-glass" href="operations/bm25-retrieval">
     BM25 (pure Python stdlib, zero external dependencies) indexes wiki pages into ~500-token chunks. OpenCode reads ranked results and synthesizes answers.
   </Card>
-  <Card title="Layer 8 — Testing" icon="flask">
+  <Card title="Layer 8 — Testing" icon="flask" href="operations/testing">
     Five test suites (344 n8n connection tests, 21 vault integrity tests, 61 script tests, 2 YAML tests, 2 BM25 tests) run via `make test` and GitHub Actions CI.
   </Card>
-  <Card title="Layer 9 — Agent Runtime" icon="microchip">
+  <Card title="Layer 9 — Agent Runtime" icon="microchip" href="skills/overview">
     13 bundled OpenCode skills, slash command definitions, 3 agent instruction files, and 7 hooks across 4 lifecycle events.
   </Card>
-  <Card title="Layer 10 — Visualization" icon="chart-bar">
+  <Card title="Layer 10 — Visualization" icon="chart-bar" href="concepts/local-first">
     The `wiki/meta/dashboard.md` command center, Obsidian canvases, and the Obsidian graph view provide a visual command layer over the entire knowledge base.
   </Card>
 </CardGroup>
@@ -63,12 +63,7 @@ The simplest path through the system is a single source being ingested. `.raw/` 
 ```mermaid
 flowchart LR
     R[".raw/\n(immutable sources)"] --> I["wiki-ingest\n(OpenCode skill)"]
-    I --> SRC["wiki/sources/\nsource summary"]
-    I --> ENT["wiki/entities/\npeople, orgs, products"]
-    I --> CON["wiki/concepts/\nideas, patterns"]
-    SRC & ENT & CON --> IDX["wiki/index.md\n(updated)"]
-    IDX --> LOG["wiki/log.md\n(prepended)"]
-    LOG --> HOT["wiki/hot.md\n(cache refreshed)"]
+    I --> WK["wiki/\n(persistent knowledge)"]
 ```
 
 The `.raw/` directory is never modified after initial placement. It is the immutable record of truth. All derived pages in `wiki/` are regenerable from it.
@@ -79,10 +74,10 @@ The automation layer separates synchronous operations (scripts that run inline i
 
 ```mermaid
 flowchart LR
-    OC["OpenCode (skills)"] -- "n8n-mcp bridge" --> N8N["n8n Docker\n(localhost:5678)"]
-    N8N --> WH["Webhooks → AOC v4 pipeline\n→ GitHub Issues"]
-    N8N --> HC["Schedule → Health Check\n(every 5 min)"]
-    N8N --> ER["Schedule → Emergency Reprocessor\n(every 5 min)"]
+    OC["OpenCode (skills)"] -- n8n-mcp bridge --> N8N["n8n Docker\n(localhost:5678)"]
+    N8N --> WH["Webhooks → AOC pipeline → GitHub Issues"]
+    N8N --> HC["Schedule → Health Check (5 min)"]
+    N8N --> ER["Schedule → Emergency Reprocessor (5 min)"]
     N8N --> DLQ["Error Trigger → Dead Letter Queue"]
     WH --> NOTIF["Slack / Telegram / Discord"]
     DLQ --> NOTIF

@@ -1,7 +1,7 @@
 ---
 title: "OpenCode Hooks: Automated Session Lifecycle Management"
 sidebarTitle: "Hooks"
-description: "Bunker OS configures 7 OpenCode hooks across 4 events — SessionStart, PostCompact, PostToolUse, and Stop — to automate context loading, git commits, and handover generation."
+description: "Bunker OS wires 7 OpenCode hooks across SessionStart, PostCompact, PostToolUse, and Stop to automate hot cache loading, auto-commits, and handover updates."
 ---
 
 Bunker OS uses OpenCode's hook system to wire the vault lifecycle directly into the agent's execution model. Without hooks, every session would start cold — the agent would have no knowledge of recent work until it was told explicitly. With hooks, context loading, mid-session commits, and hot cache updates all happen automatically at the right moments.
@@ -115,7 +115,7 @@ These two hooks fire when a session starts or resumes. Together they ensure the 
 
 **Matcher:** `` (matches all compactions)
 
-Context compaction is Claude's mechanism for summarizing old conversation turns when the context window fills up. The problem: hook-injected context from `SessionStart` does not survive compaction. The `PostCompact` hooks re-inject the hot cache immediately after compaction.
+Context compaction is OpenCode's mechanism for summarizing old conversation turns when the context window fills up. The problem: hook-injected context from `SessionStart` does not survive compaction. The `PostCompact` hooks re-inject the hot cache immediately after compaction.
 
 <Steps>
   <Step title="Command hook — reload hot cache">

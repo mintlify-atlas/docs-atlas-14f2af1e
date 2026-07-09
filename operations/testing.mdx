@@ -1,7 +1,7 @@
 ---
-title: "Testing: 430-Test Suite Across 5 Suites with GitHub Actions CI"
+title: "Testing: 430 Tests Across 5 Suites with GitHub Actions CI"
 sidebarTitle: "Testing"
-description: "Bunker OS ships with 430 tests across 5 suites — n8n workflow connections, vault integrity, script validation, YAML, and BM25 retrieval — all running on every push via GitHub Actions."
+description: "Bunker OS ships 430 tests in 5 Makefile suites: n8n workflows, vault integrity, shell scripts, YAML, and BM25. CI runs all suites on every push to main."
 ---
 
 Bunker OS treats testing as a first-class operational concern. The 430-test suite covers every layer of the system: n8n workflow JSON structure, vault file integrity, shell script correctness, YAML configuration validity, and BM25 retrieval functionality. All tests run through a single `Makefile` entry point and execute automatically on every push and pull request to `main` via GitHub Actions.

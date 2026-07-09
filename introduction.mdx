@@ -1,5 +1,5 @@
 ---
-title: "Bunker OS: Local-First Knowledge Operating System"
+title: "Bunker OS: Local-First Knowledge Operating System for AI"
 sidebarTitle: "Introduction"
 description: "Bunker OS is a local-first knowledge OS built on Obsidian and OpenCode. Learn what it does, why it exists, and how it differs from other tools."
 ---
@@ -11,10 +11,6 @@ Bunker OS is a local-first knowledge operating system built on Obsidian and Open
 Bunker OS is not a personal knowledge manager. It is an **operations system** — a platform for agents and humans to work together on research, security audits, infrastructure decisions, and project intelligence, with everything persisted as plain Markdown in an Obsidian vault on your local disk.
 
 The core insight comes from Andrej Karpathy's [LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f): rather than feeding every AI session the same raw documents, you maintain a persistent, cross-referenced wiki that grows richer with each session. Knowledge compounds like interest. Every `autoresearch`, every `ingest`, every `think` session leaves behind structured artifacts — entities, concepts, source summaries, ADRs — that every future session can draw from without re-reading the originals.
-
-<Note>
-  Bunker OS complements, rather than competes with, [claude-obsidian](https://github.com/AgriciDaniel/claude-obsidian). Where claude-obsidian is a researcher and second brain, Bunker OS is an operator. Both can coexist pointing at the same Obsidian vault.
-</Note>
 
 ## The Operations-First Difference
 
@@ -36,7 +32,7 @@ Bunker OS organizes itself into ten conceptual layers that map directly to folde
 |---|---|
 | **Capture** | `wiki/inbox`, `.raw/`, ingest server, session handovers |
 | **Normalize** | `_templates/`, `skills/wiki-ingest` |
-| **Classify** | `wiki/sources`, `wiki/entities`, `wiki/concepts`, `wiki/projects` |
+| **Classify** | `wiki/sources`, `wiki/entities`, `wiki/concepts`, `wiki/projects`, `wiki/comparisons` |
 | **Evidence** | `report.zip`, `security-audit-report.json`, evidence index with SHA256 |
 | **Governance** | `BUNKER_RULES.md`, ADR templates, knowledge supply chain |
 | **Automation** | `bin/` for sync ops, n8n for async flows, alerts, and DLQ |
@@ -44,6 +40,30 @@ Bunker OS organizes itself into ten conceptual layers that map directly to folde
 | **Testing** | 5 suites: n8n workflows, wiki integrity, scripts, YAML, retrieve |
 | **Agent Runtime** | 3 agents, commands, 13 skills, 7 hooks across 4 events |
 | **Visualization** | Dashboard, canvases, Obsidian graph view |
+
+## Why Bunker OS
+
+Bunker OS sits at the intersection of knowledge management, automation, and operational tooling — a space no other tool covers completely:
+
+| Capability | Bunker OS | claude-obsidian | Smart Connections |
+|---|:---:|:---:|:---:|
+| Self-organizing wiki | Creates entities, concepts | ✅ | ❌ |
+| n8n automation | Async + webhooks + DLQ | ❌ | ❌ |
+| Autoresearch | 3-round web with gaps | ✅ | ❌ |
+| Text retrieval | BM25 (stdlib, zero deps) | BM25 + API | ❌ |
+| Thinking framework | 10 principles | ✅ | ❌ |
+| Tests + CI | 430 tests, GitHub Actions | ✅ | ❌ |
+| Dead Letter Queue | Global error handler | ❌ | ❌ |
+| Evidence vault | SHA256 checksums | ❌ | ❌ |
+| Multi-channel alerts | Slack / Telegram / Discord | ❌ | ❌ |
+| Health monitoring | Active n8n workflow | ❌ | ❌ |
+| Multi-methodology | ❌ (generic only) | LYT / PARA / Zettelkasten | ❌ |
+| Multi-writer safe | ❌ (single-writer) | Per-file locks | ❌ |
+| Open source | MIT | MIT | Freemium |
+
+<Note>
+  Bunker OS does not compete with claude-obsidian — it complements it. Where claude-obsidian is a researcher, Bunker OS is an operator. Both can coexist pointing at the same vault.
+</Note>
 
 ## Who It's For
 
@@ -60,6 +80,7 @@ Bunker OS is designed for three primary audiences:
 | Version | v1.3.1 | v1.9.2 |
 | Purpose | Operations + automation + security | PKM / second brain |
 | Harness | OpenCode | Claude Code (plugin) |
+| Language | English | English |
 | Skills | 13 operational | 15 research |
 | Async automation | n8n on Docker | None |
 | Text retrieval | BM25 (delegates to agent) | BM25 + API + rerank |
@@ -69,6 +90,8 @@ Bunker OS is designed for three primary audiences:
 | Multi-channel alerts | Slack / Telegram / Discord | ❌ |
 | Multi-methodology | ❌ | LYT / PARA / Zettelkasten |
 | Multi-writer safe | ❌ | ✅ |
+| Plugin marketplace | ❌ | Claude Code plugin |
+| Stars | — | 8.5k |
 
 ## Explore Bunker OS
 

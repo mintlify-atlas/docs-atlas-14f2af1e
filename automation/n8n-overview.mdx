@@ -1,7 +1,7 @@
 ---
 title: "n8n Automation: Async Nervous System for Bunker OS"
 sidebarTitle: "n8n Overview"
-description: "n8n acts as Bunker OS's async execution engine — handling webhooks, AI triage, GitHub integration, error handling, and multi-channel alerts on local Docker."
+description: "Run Bunker OS automation on local Docker: webhooks, AI triage, GitHub issues, and multi-channel alerts — all via n8n at localhost:5678."
 ---
 
 n8n is the async "nervous system" of Bunker OS. While OpenCode skills handle in-session intelligence — research, triage, wiki writes — n8n handles everything that happens *between* sessions: incoming webhooks, retries on failure, AI-assisted event routing, and fan-out notifications to Slack, Telegram, and Discord. It runs entirely on local Docker at `localhost:5678`, with no cloud dependency.
@@ -11,16 +11,16 @@ n8n is the async "nervous system" of Bunker OS. While OpenCode skills handle in-
 Bash scripts are fine for synchronous, single-step operations. The moment you need API keys, retries, conditional branching, or observability, they become fragile. n8n solves exactly those problems:
 
 <CardGroup cols={2}>
-  <Card title="Security" icon="lock">
+  <Card title="Security" icon="lock" href="/operations/security">
     API keys (OpenRouter, Slack, Telegram, Discord, GitHub) live in the n8n credential vault — never in `.env` files or bash scripts committed to git.
   </Card>
-  <Card title="Reliability" icon="rotate">
+  <Card title="Reliability" icon="rotate" href="/automation/dead-letter-queue">
     Built-in retry logic, a Dead Letter Queue for error capture, and an Emergency Reprocessor that auto-retries failed events every 5 minutes.
   </Card>
-  <Card title="Complexity" icon="code-branch">
+  <Card title="Complexity" icon="code-branch" href="/automation/aoc-pipeline">
     The AOC v4 Enterprise pipeline has 37 nodes with conditional branching, AI evaluation, and parallel notification delivery — none of which are practical in bash.
   </Card>
-  <Card title="Observability" icon="chart-line">
+  <Card title="Observability" icon="chart-line" href="/concepts/architecture">
     Structured JSON logs, Prometheus-compatible metrics endpoint, and a full execution history UI at `localhost:5678`.
   </Card>
 </CardGroup>

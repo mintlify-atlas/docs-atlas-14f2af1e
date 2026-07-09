@@ -1,7 +1,7 @@
 ---
 title: "Dead Letter Queue: Global Error Handler for n8n Workflows"
 sidebarTitle: "Dead Letter Queue"
-description: "The Dead Letter Queue is a global n8n error trigger that catches failures from every workflow, classifies severity, and persists up to 200 errors for review and replay."
+description: "Global n8n error trigger that catches failures from every workflow, classifies CRITICAL vs WARNING severity, and stores the last 200 errors for replay."
 ---
 
 The Dead Letter Queue (DLQ) is a 5-node n8n workflow that acts as a safety net for the entire Bunker OS automation layer. Unlike a normal error handler scoped to a single workflow, the DLQ is configured as a **global error trigger** — it fires automatically whenever *any* workflow in the n8n instance fails. It normalizes the error, classifies severity, optionally sends a notification, and persists the failure to `staticData` for later review or replay. It ships as Inactive and must be activated before you run any other workflows.

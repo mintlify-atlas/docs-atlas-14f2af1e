@@ -1,7 +1,7 @@
 ---
-title: "AOC v4 Enterprise: 37-Node AI Triage Pipeline"
+title: "AOC v4 Enterprise Pipeline: 37-Node AI Triage for n8n"
 sidebarTitle: "AOC Pipeline"
-description: "AOC v4 Enterprise routes webhook events through AI triage on OpenRouter, creates GitHub issues, and delivers multi-channel notifications via Slack, Telegram, and Discord."
+description: "37-node n8n pipeline with Redis deduplication, OpenRouter AI triage, GitHub issue creation, and parallel Slack, Telegram, and Discord notifications."
 ---
 
 AOC v4 Enterprise is the flagship automation workflow in Bunker OS. It is a 37-node n8n pipeline that takes an incoming webhook event and walks it through the full operational lifecycle: payload validation, Redis-based deduplication, AI triage via OpenRouter, GitHub issue creation, human-in-the-loop routing for review cases, emergency fast-path for critical events, parallel multi-channel notification delivery, and a final audit write. It ships as **Inactive** — you must configure credentials and activate it manually.

@@ -1,5 +1,5 @@
 ---
-title: "How Knowledge Compounds in Bunker OS"
+title: "Knowledge Lifecycle: How Bunker OS Compounds Knowledge"
 sidebarTitle: "Knowledge Lifecycle"
 description: "Trace how a raw source becomes a cross-referenced wiki page — from ingest through classification, indexing, BM25 retrieval, and synthesis by OpenCode."
 ---
@@ -32,10 +32,10 @@ Every time a new resource is provided — a URL, a file, a document dropped in `
   <Step title="Create source page in wiki/sources/">
     Write a full summary page at `wiki/sources/[slug].md` with complete frontmatter: `type: source`, `source_type`, `author`, `date_published`, `url`, `confidence`. Read the source completely — do not skim. The summary page is the permanent record of what was in the document at time of ingestion.
   </Step>
-  <Step title="Create entity pages in wiki/entities/">
+  <Step title="Create entity page in wiki/entities/">
     For every person, organization, product, or repository mentioned significantly in the source, create or update a page in `wiki/entities/`. Entity pages track what is known about that entity across all sources — they accumulate knowledge from every ingest that touches them.
   </Step>
-  <Step title="Create concept pages in the correct folder">
+  <Step title="Create concept page in correct folder">
     For every idea, pattern, or framework introduced by the source, create or update a concept page. Technical concepts with inline code examples go in `wiki/concepts/tech-stack/`. General concepts, patterns, and mental models go in `wiki/concepts/`. The correct folder is not cosmetic — the lint check uses it to validate vault health.
   </Step>
   <Step title="Update wiki/index.md">

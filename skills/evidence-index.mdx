@@ -1,7 +1,7 @@
 ---
 title: "Evidence Index: SHA256 Audit Trail for Security Artifacts"
 sidebarTitle: "Evidence Index"
-description: "The evidence-index skill indexes security audit artifacts with SHA256 checksums — creating a tamper-evident chain of custody for reports, scans, and findings."
+description: "Index security audit artifacts with SHA256 checksums into a tamper-evident chain of custody. Writes to evidence-index.md and evidence-manifest.json only."
 ---
 
 The `evidence-index` skill creates a tamper-evident chain of custody for security audit artifacts. When you run a security audit, penetration test, or any operation that produces artifacts you need to preserve — scan outputs, ZIP archives, JSON reports — the skill calculates SHA256 checksums for every file and writes a manifest to the wiki. Any subsequent modification to the original artifact is immediately detectable by re-running the index and comparing checksums.

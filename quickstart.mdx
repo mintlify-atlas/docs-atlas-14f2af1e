@@ -1,5 +1,5 @@
 ---
-title: "Get Started with Bunker OS in Minutes"
+title: "Quickstart: Install and Run Bunker OS in Under 5 Minutes"
 sidebarTitle: "Quickstart"
 description: "Clone the Bunker OS vault, open it in Obsidian and OpenCode, configure hooks and skills, and run your first autonomous research session."
 ---
@@ -116,6 +116,8 @@ make test                              # 430 tests, 5 suites
 ./bin/bunker-check.sh                  # Local definition of done
 ./bin/wiki-integrity.sh                # Scan for orphans and broken links
 ./bin/evidence-index.sh                # Index evidence with SHA256
+./bin/bunker.sh init                   # Vault health check
+./bin/wiki-sync.sh --apply             # Sync + commit wiki
 python3 scripts/retrieve.py build      # Rebuild BM25 index
 python3 scripts/retrieve.py "query"    # BM25 text retrieval
 ```

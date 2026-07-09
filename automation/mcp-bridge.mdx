@@ -1,7 +1,7 @@
 ---
 title: "OpenCode MCP Bridge: Connecting Agent Skills to n8n"
 sidebarTitle: "MCP Bridge"
-description: "Configure the Model Context Protocol bridge between OpenCode and n8n so agent skills can trigger async pipelines, and set up the obsidian-vault MCP for direct wiki access."
+description: "Set up n8n-mcp and obsidian-vault MCP servers in opencode.json so OpenCode skills can trigger async n8n pipelines and read/write vault notes directly."
 ---
 
 Bunker OS uses two Model Context Protocol (MCP) servers to give OpenCode skills persistent reach beyond the in-session context window. The `obsidian-vault` server gives skills direct read/write access to the Obsidian vault — creating and updating wiki notes without copy-paste. The `n8n-mcp` server gives skills "hands" to trigger async n8n pipelines, so an agent can fire the AOC v4 Enterprise webhook or check workflow status without leaving the OpenCode session. Both servers are configured in a single JSON file on your local machine.
@@ -9,10 +9,10 @@ Bunker OS uses two Model Context Protocol (MCP) servers to give OpenCode skills 
 ## The Two MCP Servers
 
 <CardGroup cols={2}>
-  <Card title="obsidian-vault" icon="vault">
+  <Card title="obsidian-vault" icon="vault" href="/skills/autoresearch">
     Direct read/write access to your Obsidian vault. Used by `autoresearch`, `wiki-ingest`, `wiki-query`, `wiki-lint`, and `save` skills to create and update wiki notes.
   </Card>
-  <Card title="n8n-mcp" icon="plug">
+  <Card title="n8n-mcp" icon="plug" href="/automation/n8n-overview">
     Connects OpenCode to the n8n instance running at `localhost:5678`. Exposes n8n workflow operations as MCP tools so skills can trigger pipelines programmatically.
   </Card>
 </CardGroup>
@@ -106,20 +106,23 @@ Requires the **Local REST API** community plugin installed and enabled in Obsidi
 2. Browse → Search "Local REST API" → Install → Enable
 3. **Settings → Local REST API** → Copy the API key
 
-**Configure the MCP server:**
+**Configure the MCP server** by adding the `obsidian-vault` block to `~/.config/opencode/opencode.json`:
 
-```bash
-opencode mcp add-json obsidian-vault '{
-  "type": "stdio",
-  "command": "uvx",
-  "args": ["mcp-obsidian"],
-  "env": {
-    "OBSIDIAN_API_KEY": "your-key-here",
-    "OBSIDIAN_HOST": "127.0.0.1",
-    "OBSIDIAN_PORT": "27124",
-    "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+```json
+{
+  "mcp": {
+    "obsidian-vault": {
+      "type": "local",
+      "command": ["uvx", "mcp-obsidian"],
+      "env": {
+        "OBSIDIAN_API_KEY": "your-key-here",
+        "OBSIDIAN_HOST": "127.0.0.1",
+        "OBSIDIAN_PORT": "27124",
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      }
+    }
   }
-}' --scope user
+}
 ```
 
 Test the plugin is running before configuring:
@@ -134,17 +137,22 @@ You should receive a JSON response with vault info.
 
 Reads the vault directory directly from the filesystem. No Obsidian plugin required.
 
-```bash
-opencode mcp add-json obsidian-vault '{
-  "type": "stdio",
-  "command": "npx",
-  "args": ["-y", "@bitbonsai/mcpvault@latest", "/absolute/path/to/your/vault"]
-}' --scope user
+Add the `obsidian-vault` block to `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "mcp": {
+    "obsidian-vault": {
+      "type": "local",
+      "command": ["npx", "-y", "@bitbonsai/mcpvault@latest", "/absolute/path/to/your/vault"]
+    }
+  }
+}
 ```
 
 Replace `/absolute/path/to/your/vault` with the actual path to your `opencode-obsidian` directory.
 
-Both options use `--scope user` so the vault MCP is available across all OpenCode projects on your machine, not just the Bunker OS project.
+Both options are configured in `~/.config/opencode/opencode.json`, which applies globally across all OpenCode projects on your machine.
 
 ## MCP Tools Available to Skills
 

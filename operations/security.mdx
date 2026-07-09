@@ -1,7 +1,7 @@
 ---
 title: "Security Model and Hardening Guidelines for Bunker OS"
 sidebarTitle: "Security"
-description: "Bunker OS's security model covers secrets management, URL validation in autoresearch, local binding, dry-run defaults, and OWASP-aligned MCP governance practices."
+description: "Bunker OS ships localhost-only HTTP binding, dry-run defaults, automated CI secret scanning, autoresearch URL hygiene, and SHA256 evidence indexing."
 ---
 
 Bunker OS is designed as a local-first system: data stays on disk, automation runs on localhost Docker, and no credentials are ever embedded in source files. The security model is layered — secure defaults in scripts, automated secret scanning in CI, URL hygiene in web research, and network isolation for all HTTP services.

@@ -1,7 +1,7 @@
 ---
 title: "Local-First Design: Why Data Never Leaves Your Machine"
 sidebarTitle: "Local-First"
-description: "Bunker OS is designed for complete data sovereignty — every component runs on your hardware with no cloud dependencies, no telemetry, and no vendor lock-in."
+description: "Bunker OS is built for complete data sovereignty — every component runs on your hardware with no cloud dependencies, no telemetry, and no vendor lock-in."
 ---
 
 Bunker OS was designed from the start around a single non-negotiable constraint: your data never leaves your machine unless you explicitly choose to send it somewhere. The vault is a plain folder of Markdown files. The BM25 search index is a JSON file on disk. The n8n automation engine runs on local Docker. The OpenCode agent state is stored in a local SQLite database. There are no background sync services, no telemetry, no call-home behavior, and no account required to use the core system.
@@ -11,16 +11,16 @@ Bunker OS was designed from the start around a single non-negotiable constraint:
 Local-first is not just a marketing claim — it is a set of concrete architectural decisions that shape every component of the system.
 
 <CardGroup cols={2}>
-  <Card title="Plain Markdown files" icon="file-lines">
+  <Card title="Plain Markdown files" icon="file-lines" href="concepts/vault-structure">
     The entire wiki is Markdown files in a folder. You can read them in any text editor, version them with git, diff them, and search them with grep. There is no proprietary database, no binary format, no lock-in.
   </Card>
-  <Card title="Zero-dependency retrieval" icon="magnifying-glass">
+  <Card title="Zero-dependency retrieval" icon="magnifying-glass" href="operations/bm25-retrieval">
     The BM25 search engine is pure Python stdlib — no numpy, no ollama, no external packages. The index is a JSON file you can inspect directly. It runs completely offline.
   </Card>
-  <Card title="Docker-local automation" icon="docker">
+  <Card title="Docker-local automation" icon="docker" href="automation/n8n-overview">
     n8n runs on your machine via Docker Compose. Workflows are JSON files stored in the repo. No n8n Cloud account is required. The n8n UI is available at `localhost:5678`.
   </Card>
-  <Card title="No API keys required for core" icon="key">
+  <Card title="No API keys required for core" icon="key" href="quickstart">
     BM25 retrieval, vault management, wiki querying, ingestion, linting, and all bash scripts run without any API key. Optional integrations remain strictly optional.
   </Card>
 </CardGroup>
@@ -46,7 +46,7 @@ Every component in Bunker OS has a known, inspectable, local storage location.
 
 ## The Safety Model
 
-Four safety properties are enforced at the infrastructure level, not just by convention:
+Five safety properties are enforced at the infrastructure level, not just by convention:
 
 **1. Script path resolution via `BUNKER_HOME`**
 
@@ -74,6 +74,10 @@ The HTTP ingest server binds to `127.0.0.1:9090` by default, not `0.0.0.0`. It i
 **4. Evidence artifacts are indexed, not modified**
 
 The `evidence-index` skill and `bin/evidence-index.sh` create a manifest of evidence artifacts with SHA256 checksums. The originals are never touched. The index is a derived artifact; the originals remain bit-for-bit identical to what was captured.
+
+**5. n8n secrets managed via `.env` (gitignored) + n8n credential vault**
+
+API keys and external service credentials are stored in two places exclusively: the `automation/n8n-lab/.env` file (gitignored, never committed) and the n8n credential vault (stored in the Docker volume, encrypted at rest). No credential ever appears in a script, skill, or wiki page.
 
 ## Syncing Across Devices
 
