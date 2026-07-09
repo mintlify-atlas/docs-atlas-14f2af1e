@@ -1,0 +1,233 @@
+---
+title: "Obsidian Vault Structure and File Organization"
+sidebarTitle: "Vault Structure"
+description: "A complete map of the Bunker OS Obsidian vault — directory layout, special files like hot.md and index.md, and the classification system for sources, entities, and concepts."
+---
+
+The Bunker OS repository is simultaneously an OpenCode agent environment and an Obsidian vault. Every directory has a precise role in the pipeline — raw sources land in one place, generated knowledge accumulates in another, skills and automation live in clearly separated locations. This page is the canonical reference for what goes where.
+
+## Top-Level Repository Layout
+
+The repository root is the vault root. Open it directly in Obsidian as a folder vault. All paths below are relative to the repository root.
+
+```text
+opencode-obsidian/
+├── .raw/                         Immutable source documents — never modified
+├── wiki/                         All AI-generated and human-curated knowledge
+├── skills/                       13 OpenCode skills bundled with this repo
+├── scripts/                      Python BM25 indexer + retrieval orchestrator
+├── hooks/
+│   └── hooks.json                7 hooks across 4 OpenCode lifecycle events
+├── bin/                          15 shell scripts + Go source + compiled binary
+├── agents/                       3 OpenCode agent instruction files
+├── commands/                     Slash command definitions
+├── tests/                        5 test suites, 430 tests total
+├── automation/
+│   └── n8n-lab/                  Docker Compose + workflow JSON files
+├── _templates/                   Obsidian Templater templates
+├── .github/workflows/test.yml    CI: runs on every push/PR to main
+├── README.md                     Project overview
+├── PROJECT.md                    Technical architecture reference
+├── WIKI.md                       Wiki schema and operations reference
+├── BUNKER_RULES.md               Governance rules and technical standards
+├── AGENTS.md                     Agent startup and ingestion instructions
+└── Makefile                      5 test targets
+```
+
+<Note>
+  The `wiki/` directory is listed in `.gitignore`. Your personal knowledge base — every page you ingest, every entity you create — stays on your machine and is never pushed to any remote repository.
+</Note>
+
+## The `.raw/` Directory
+
+`.raw/` is the immutable source layer. Drop files here before ingesting them. The `wiki-ingest` skill reads from `.raw/` and derives structured wiki pages — but the originals are never touched. Dot-prefixed folders are hidden in Obsidian's file explorer and graph view, keeping the vault clean.
+
+```bash
+# Place a source for ingestion
+cp ~/Downloads/architecture-paper.pdf .raw/
+
+# Then ingest it via OpenCode
+# ingest .raw/architecture-paper.pdf
+```
+
+## Wiki Directory Layout
+
+The `wiki/` directory is the knowledge base. Every file here was created by an OpenCode skill or manually authored following the standard format. The structure is flat enough to navigate but deep enough to classify.
+
+```text
+wiki/
+├── hot.md              Hot cache — recent context (~500 words, session entry point)
+├── index.md            Master catalog of all pages in the vault
+├── log.md              Chronological operation log (append-only, newest at top)
+├── overview.md         Executive summary of the entire wiki
+├── sources/            One summary page per external source ingested
+│   └── _index.md       Sub-index of all sources
+├── entities/           People, organizations, products, and repositories
+│   └── _index.md
+├── concepts/           Ideas, patterns, frameworks, and mental models
+│   ├── _index.md
+│   └── tech-stack/     Technical concepts with inline code examples
+├── comparisons/        Side-by-side analyses of tools, approaches, or designs
+├── blueprints/         Executable architecture blueprints
+├── projects/           Live project tracking pages
+├── questions/          Archived answers to user queries
+├── decisions/          ADRs (Architecture Decision Records) and AgDRs
+├── meta/               Dashboard, handovers, intelligence reports
+│   ├── dashboard.md    Visual command center
+│   ├── agent-queue.md  Pending agent tasks
+│   └── handovers/      Cross-session state files
+└── canvases/           Obsidian canvas files (.canvas)
+```
+
+## Special Files: hot.md, index.md, log.md
+
+These three files are the operational core of the wiki. Every agent session interacts with all three.
+
+### `wiki/hot.md` — The Hot Cache
+
+`wiki/hot.md` is a ~500-word summary of the most recent context. It is read automatically at the start of every OpenCode session via the `SessionStart` hook, and updated automatically at session end via the `Stop` hook. It is not a journal — it is a cache. Each write overwrites it completely.
+
+```markdown
+---
+type: meta
+title: "Hot Cache"
+updated: YYYY-MM-DD
+tags: [meta, hot-cache, context]
+status: evergreen
+related: []
+---
+
+# Recent Context — Bunker OS v1.3.1
+
+## Current Focus
+[One line on what is being worked on]
+
+## Key Recent Facts
+- [Relevant fact 1]
+- [Relevant fact 2]
+
+## Recent Changes
+- Created: [[Page 1]], [[Page 2]]
+- Updated: [[Page 3]]
+
+## Active Threads
+- Current research topic
+- Next planned step
+```
+
+### `wiki/index.md` — The Master Catalog
+
+`wiki/index.md` is the entry point for any query that cannot be answered from `hot.md` alone. It contains a categorized list of every page in the vault with one-line descriptions. Every ingest operation must update it. Never skip the index update — it is the vault's navigation layer.
+
+### `wiki/log.md` — The Operation Log
+
+`wiki/log.md` is append-only. New entries are **prepended** (newest at top). It records every ingest, query, and maintenance operation with date and a one-line summary. It is the audit trail of the vault's growth over time.
+
+## Ingestion Destination Types
+
+When a new resource is ingested, the `wiki-ingest` skill routes content to one of four destination types. This routing is deterministic based on content type.
+
+| Resource type | Destination folder | Example filename |
+|---|---|---|
+| Person, organization, or product | `wiki/entities/` | `wiki/entities/openrouter.md` |
+| Technical concept with code examples | `wiki/concepts/tech-stack/` | `wiki/concepts/tech-stack/bm25.md` |
+| General concept, pattern, or framework | `wiki/concepts/` | `wiki/concepts/dead-letter-queue.md` |
+| External source (article, paper, doc, URL) | `wiki/sources/` | `wiki/sources/karpathy-llm-wiki.md` |
+
+## Standard Page Frontmatter
+
+Every wiki page carries YAML frontmatter. The schema varies by page type but all pages share the core fields. Using consistent frontmatter enables the `wiki-lint` health check to detect missing metadata across the vault.
+
+```yaml
+# Entity page
+---
+type: entity
+title: "Entity Name"
+domain: tech-stack
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+tags: [entity]
+status: active
+related: []
+sources: []
+---
+
+# Concept page
+---
+type: concept
+title: "Concept Name"
+domain: tech-stack
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+tags: [concept]
+status: mature|active|seed
+related: []
+sources: []
+---
+
+# Source page
+---
+type: source
+title: "Source Title"
+source_type: article|paper|doc|url
+author: "Author Name"
+date_published: YYYY-MM-DD
+url: "https://..."
+confidence: high|medium|low
+tags: [research, topic]
+---
+```
+
+## Skills Directory
+
+The `skills/` directory contains 13 OpenCode skills bundled with Bunker OS. Each skill lives in its own subdirectory with a `SKILL.md` instruction file.
+
+```text
+skills/
+├── autoresearch/         3-round autonomous web research loop
+├── wiki-retrieve/        BM25 text retrieval (zero deps)
+├── think/                10-principle decision framework
+├── wiki-ingest/          Source ingestion with entity/concept extraction
+├── wiki-query/           Wiki querying with synthesis
+├── wiki-lint/            Vault health check (8 categories)
+├── save/                 Save conversation as wiki note
+├── wiki/                 Wiki orchestrator (setup, scaffold, routing)
+├── canvas/               Obsidian canvas visual layer
+├── defuddle/             Web extraction wrapper
+├── evidence-index/       Evidence indexing with SHA256
+├── obsidian-bases/       Obsidian Bases schema reference
+└── obsidian-markdown/    Obsidian Flavored Markdown reference
+```
+
+## Automation Directory
+
+The `automation/n8n-lab/` directory contains everything needed to run the n8n async layer. Workflow JSON files can be imported directly into the n8n UI.
+
+```text
+automation/
+└── n8n-lab/
+    ├── docker-compose.yml               Production-tuned Docker configuration
+    ├── .env                             Secrets (gitignored)
+    └── workflows/
+        ├── bunker-health-check.json     Health check every 5 min
+        ├── bunker-ultimate-alerter.json Multi-channel alert dispatcher
+        ├── bunker-dead-letter-queue.json Global error capture
+        └── bunker-aoc-v4-enterprise.json 37-node AI triage pipeline
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Architecture" href="concepts/architecture" icon="layer-group">
+    The 10-layer pipeline that governs how data flows through the system.
+  </Card>
+  <Card title="Knowledge Lifecycle" href="concepts/knowledge-lifecycle" icon="arrow-rotate-right">
+    The full ingestion workflow from raw source to cross-referenced wiki page.
+  </Card>
+  <Card title="Skills Overview" href="skills/overview" icon="wand-magic-sparkles">
+    All 13 bundled OpenCode skills and how to invoke them.
+  </Card>
+  <Card title="Local-First Design" href="concepts/local-first" icon="hard-drive">
+    Why and how all data stays on your machine.
+  </Card>
+</CardGroup>

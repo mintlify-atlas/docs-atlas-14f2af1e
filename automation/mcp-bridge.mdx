@@ -1,0 +1,229 @@
+---
+title: "OpenCode MCP Bridge: Connecting Agent Skills to n8n"
+sidebarTitle: "MCP Bridge"
+description: "Configure the Model Context Protocol bridge between OpenCode and n8n so agent skills can trigger async pipelines, and set up the obsidian-vault MCP for direct wiki access."
+---
+
+Bunker OS uses two Model Context Protocol (MCP) servers to give OpenCode skills persistent reach beyond the in-session context window. The `obsidian-vault` server gives skills direct read/write access to the Obsidian vault — creating and updating wiki notes without copy-paste. The `n8n-mcp` server gives skills "hands" to trigger async n8n pipelines, so an agent can fire the AOC v4 Enterprise webhook or check workflow status without leaving the OpenCode session. Both servers are configured in a single JSON file on your local machine.
+
+## The Two MCP Servers
+
+<CardGroup cols={2}>
+  <Card title="obsidian-vault" icon="vault">
+    Direct read/write access to your Obsidian vault. Used by `autoresearch`, `wiki-ingest`, `wiki-query`, `wiki-lint`, and `save` skills to create and update wiki notes.
+  </Card>
+  <Card title="n8n-mcp" icon="plug">
+    Connects OpenCode to the n8n instance running at `localhost:5678`. Exposes n8n workflow operations as MCP tools so skills can trigger pipelines programmatically.
+  </Card>
+</CardGroup>
+
+## OpenCode Config File
+
+Both MCP servers are declared in the `mcp` block of `~/.config/opencode/opencode.json`. This file is read by OpenCode on startup and applies globally across all projects.
+
+Valid server shapes are:
+
+- `type: "local"` with a `command` array — for local process servers (e.g., `uvx`, `npx`)
+- `type: "remote"` with a `url` — for HTTP-based servers like n8n's built-in MCP endpoint
+- `enabled: true | false` — optional flag to toggle a server without removing it
+- `headers` — allowed **only** for `type: "remote"`
+- `oauth` — allowed **only** for `type: "remote"`
+
+<Warning>
+  The old `type: "http"` shape is **invalid** in current OpenCode versions. Using it causes OpenCode to fail on startup with `Invalid input mcp.n8n-mcp`. Always use `type: "remote"` for HTTP-based servers. This was the root cause of a known startup regression — see the [Troubleshooting](#troubleshooting) section below.
+</Warning>
+
+## Configuring n8n MCP
+
+### Step 1: Enable MCP in n8n
+
+In the n8n UI go to **Settings → AI** and enable **"Enable instance-level MCP access"**. This activates the `/mcp-server/http` endpoint at `localhost:5678`.
+
+### Step 2: Add the n8n-mcp block to opencode.json
+
+The exact working configuration:
+
+```json
+{
+  "mcp": {
+    "n8n-mcp": {
+      "type": "remote",
+      "url": "http://localhost:5678/mcp-server/http",
+      "enabled": true,
+      "oauth": false
+    }
+  }
+}
+```
+
+<Steps>
+  <Step title="Open your OpenCode config">
+    ```bash
+    $EDITOR ~/.config/opencode/opencode.json
+    ```
+
+    If the file does not exist, create it with the JSON above as the full contents.
+  </Step>
+
+  <Step title="Add the n8n-mcp server block">
+    Merge the `n8n-mcp` entry into the existing `mcp` block if you already have other servers configured. Do not replace the entire file.
+  </Step>
+
+  <Step title="Start OpenCode and authenticate">
+    ```bash
+    opencode mcp auth n8n-mcp
+    ```
+
+    OpenCode will open an OAuth flow in your browser. Complete the login and OpenCode stores the auth state separately from the config file.
+  </Step>
+
+  <Step title="Verify the connection">
+    ```bash
+    opencode mcp list          # shows all configured MCP servers
+    opencode mcp auth list     # shows authentication status
+    opencode mcp debug n8n-mcp # tests the connection end-to-end
+    ```
+
+    A successful result shows `n8n-mcp authenticated` in `auth list` and `Connection successful (already authenticated)` in `debug`.
+  </Step>
+</Steps>
+
+<Note>
+  The **401 Unauthorized** response you see during the first `opencode mcp debug n8n-mcp` probe is expected and does not mean the MCP is broken. OpenCode intentionally calls the server without credentials on the first probe to detect the auth flow type. The sequence is: `401 Unauthorized` → OAuth redirect → success after login. The final state is what matters.
+</Note>
+
+## Configuring obsidian-vault MCP
+
+The `obsidian-vault` MCP server gives skills direct access to vault notes. There are two options depending on whether you want to install an Obsidian plugin.
+
+### Option A — REST API (mcp-obsidian)
+
+Requires the **Local REST API** community plugin installed and enabled in Obsidian. The plugin runs on `https://127.0.0.1:27124` with a self-signed certificate.
+
+**Install the plugin:**
+
+1. Obsidian → **Settings → Community Plugins** → Turn off Restricted Mode
+2. Browse → Search "Local REST API" → Install → Enable
+3. **Settings → Local REST API** → Copy the API key
+
+**Configure the MCP server:**
+
+```bash
+opencode mcp add-json obsidian-vault '{
+  "type": "stdio",
+  "command": "uvx",
+  "args": ["mcp-obsidian"],
+  "env": {
+    "OBSIDIAN_API_KEY": "your-key-here",
+    "OBSIDIAN_HOST": "127.0.0.1",
+    "OBSIDIAN_PORT": "27124",
+    "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+  }
+}' --scope user
+```
+
+Test the plugin is running before configuring:
+
+```bash
+curl -sk -H "Authorization: Bearer <YOUR_KEY>" https://127.0.0.1:27124/
+```
+
+You should receive a JSON response with vault info.
+
+### Option B — Filesystem (MCPVault, no plugin needed)
+
+Reads the vault directory directly from the filesystem. No Obsidian plugin required.
+
+```bash
+opencode mcp add-json obsidian-vault '{
+  "type": "stdio",
+  "command": "npx",
+  "args": ["-y", "@bitbonsai/mcpvault@latest", "/absolute/path/to/your/vault"]
+}' --scope user
+```
+
+Replace `/absolute/path/to/your/vault` with the actual path to your `opencode-obsidian` directory.
+
+Both options use `--scope user` so the vault MCP is available across all OpenCode projects on your machine, not just the Bunker OS project.
+
+## MCP Tools Available to Skills
+
+Once `obsidian-vault` is configured, the following tools become available to all skills in OpenCode sessions:
+
+| Tool | Purpose |
+|---|---|
+| `obsidian-vault_read_note` | Read the full content of a vault note by path |
+| `obsidian-vault_write_note` | Create or overwrite a vault note |
+| `obsidian-vault_search_notes` | Full-text search across all vault notes |
+| `obsidian-vault_patch_note` | Surgical edit — append or replace under a heading |
+| `obsidian-vault_list_directory` | List notes and folders at a vault path |
+| `obsidian-vault_update_frontmatter` | Update YAML frontmatter fields without touching the body |
+| `obsidian-vault_get_notes_info` | Get metadata (frontmatter, size, dates) for one or more notes |
+
+These are the tools used by `autoresearch` to file research pages, by `wiki-ingest` to create entity and concept pages, and by `save` to persist conversation summaries — all without copy-paste.
+
+## Troubleshooting
+
+### OpenCode won't start after editing opencode.json
+
+Check that the config uses `type: "remote"` (not `type: "http"`). The `type: "http"` shape was valid in older OpenCode versions but was removed. The error message is:
+
+```
+Invalid input mcp.n8n-mcp
+```
+
+Fix: replace `"type": "http"` with `"type": "remote"` and remove any `headers` block (use OAuth instead for auth).
+
+### OpenCode is stuck on startup with a WAL error
+
+If OpenCode fails before it even reaches the MCP configuration step with a message like:
+
+```
+Failed to run the query 'PRAGMA wal_checkpoint(PASSIVE)'
+```
+
+Run the WAL checkpoint fix:
+
+```bash
+sqlite3 ~/.local/share/opencode/opencode.db 'PRAGMA wal_checkpoint(TRUNCATE);'
+```
+
+This clears the WAL file and allows OpenCode to start. After running the command, the WAL file drops to zero bytes and OpenCode launches normally.
+
+### n8n MCP shows 401 after authentication
+
+The 401 on the first probe is expected (see the Note above). If you see a persistent 401 after completing the OAuth flow, re-authenticate:
+
+```bash
+opencode mcp auth n8n-mcp
+```
+
+Then verify with:
+
+```bash
+opencode mcp debug n8n-mcp
+```
+
+### obsidian-vault tools not appearing in session
+
+Confirm the server is registered and active:
+
+```bash
+opencode mcp list
+```
+
+If the server appears but tools are missing, check that the Local REST API plugin is running in Obsidian (Option A) or that the vault path is correct (Option B).
+
+## Related Pages
+
+<CardGroup cols={3}>
+  <Card title="n8n Overview" icon="circle-nodes" href="/automation/n8n-overview">
+    Start here for n8n Docker setup before configuring the MCP bridge.
+  </Card>
+  <Card title="AOC Pipeline" icon="diagram-project" href="/automation/aoc-pipeline">
+    Trigger the AOC v4 pipeline from OpenCode skills via n8n-mcp.
+  </Card>
+  <Card title="Dead Letter Queue" icon="triangle-exclamation" href="/automation/dead-letter-queue">
+    Capture errors from MCP-triggered workflow executions.
+  </Card>
+</CardGroup>

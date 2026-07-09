@@ -1,0 +1,187 @@
+---
+title: "Evidence Index: SHA256 Audit Trail for Security Artifacts"
+sidebarTitle: "Evidence Index"
+description: "The evidence-index skill indexes security audit artifacts with SHA256 checksums — creating a tamper-evident chain of custody for reports, scans, and findings."
+---
+
+The `evidence-index` skill creates a tamper-evident chain of custody for security audit artifacts. When you run a security audit, penetration test, or any operation that produces artifacts you need to preserve — scan outputs, ZIP archives, JSON reports — the skill calculates SHA256 checksums for every file and writes a manifest to the wiki. Any subsequent modification to the original artifact is immediately detectable by re-running the index and comparing checksums.
+
+Evidence artifacts are **indexed, not modified**. The skill reads the originals, computes checksums, and writes to two destinations: `wiki/meta/evidence-index.md` (human-readable) and `wiki/meta/evidence-manifest.json` (machine-readable). The original files remain untouched.
+
+## What Gets Indexed
+
+The skill currently indexes two artifact types out of the box:
+
+| Artifact | Type label | How it's indexed |
+|---|---|---|
+| `report.zip` | `zip-evidence` | SHA256 of the archive + SHA256 of every internal entry |
+| `security-audit-report.json` | `security-audit-json` | SHA256 of the file + summary of top-level JSON keys |
+
+Both files must exist at the repo root. If a file is absent, it is silently skipped and not included in the manifest — no error is thrown.
+
+## Running the Evidence Index
+
+**Via skill trigger:**
+
+```
+evidence-index
+index evidence
+```
+
+**Via CLI:**
+
+```bash
+./bin/evidence-index.sh
+```
+
+The shell script sets `BUNKER_HOME` to the repo root and runs an embedded Python script that handles all hashing, manifest generation, and index writing. No external dependencies are required beyond Python 3.10+.
+
+## CLI Output
+
+```
+Evidence index updated: wiki/meta/evidence-index.md
+Evidence manifest updated: wiki/meta/evidence-manifest.json
+```
+
+## How Checksums Are Computed
+
+The `bin/evidence-index.sh` script uses Python's stdlib `hashlib` module with SHA256. Files are read in 1 MB chunks to handle large archives without memory pressure:
+
+```python
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open('rb') as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b''):
+            h.update(chunk)
+    return h.hexdigest()
+```
+
+For ZIP archives (`report.zip`), the script additionally opens the archive with `zipfile.ZipFile` and computes a SHA256 for each internal entry. This detects tampering at the individual-file level inside the archive, not just at the archive level.
+
+## Output Files
+
+### wiki/meta/evidence-index.md
+
+A human-readable Obsidian page written with this structure:
+
+```markdown
+---
+type: evidence-index
+title: "Evidence Index"
+updated: YYYY-MM-DD
+status: active
+tags: [evidence, audit, governance, bunker-os]
+related: [[dashboard]], [[INTEGRITY-REPORT]]
+---
+
+# Evidence Index
+
+## `report.zip`
+
+- Type: `zip-evidence`
+- Size: `N` bytes
+- SHA256: `<hex digest>`
+- Manifest: `wiki/meta/evidence-manifest.json`
+
+### Internal entries
+- `path/to/file.ext` — N bytes — sha256 `<hex digest>`
+
+## `security-audit-report.json`
+
+- Type: `security-audit-json`
+- Size: `N` bytes
+- SHA256: `<hex digest>`
+- Manifest: `wiki/meta/evidence-manifest.json`
+
+### Summary
+- top_level_keys: `['ArtifactID', 'ArtifactName', 'CreatedAt', ...]`
+- note: `Stored as original audit output; review before using as current truth.`
+
+## Evidence Handling Policy
+
+- Original artifacts remain immutable unless a new version is explicitly created.
+- Notes may interpret evidence, but must link back to this index or the manifest.
+- Checksums are used to detect accidental changes.
+- If an artifact comes from a past repository state, mark it as historical instead of treating it as current truth.
+```
+
+### wiki/meta/evidence-manifest.json
+
+A machine-readable JSON manifest:
+
+```json
+{
+  "generated_at": "2026-04-20T22:22:27Z",
+  "artifacts": [
+    {
+      "path": "report.zip",
+      "type": "zip-evidence",
+      "size_bytes": 12345,
+      "sha256": "<hex digest>",
+      "indexed_at": "2026-04-20T22:22:27Z",
+      "entries": [
+        {
+          "path": "findings/critical.md",
+          "size_bytes": 2048,
+          "sha256": "<hex digest>"
+        }
+      ]
+    },
+    {
+      "path": "security-audit-report.json",
+      "type": "security-audit-json",
+      "size_bytes": 8921,
+      "sha256": "<hex digest>",
+      "indexed_at": "2026-04-20T22:22:27Z",
+      "summary": {
+        "top_level_keys": ["ArtifactID", "ArtifactName", "CreatedAt", "Metadata", "Results"],
+        "note": "Stored as original audit output; review before using as current truth."
+      }
+    }
+  ]
+}
+```
+
+## The security-audit-report.json Format
+
+The bundled `security-audit-report.json` is a Trivy scan output (schema version 2). Key top-level fields:
+
+| Field | Description |
+|---|---|
+| `SchemaVersion` | Trivy schema version (currently `2`) |
+| `Trivy.Version` | Trivy CLI version that produced the report |
+| `ReportID` | UUID for this specific scan run |
+| `CreatedAt` | ISO 8601 timestamp of the scan |
+| `ArtifactID` | SHA256 digest of the scanned artifact |
+| `ArtifactName` | Target path or repository name scanned |
+| `ArtifactType` | `repository`, `image`, or `filesystem` |
+| `Metadata` | Git metadata: `RepoURL`, `Branch`, `Commit`, `CommitMsg`, `Author` |
+| `Results` | Array of scan results — one entry per target file (go.mod, package.json, etc.) |
+
+Each entry in `Results` contains a `Target` (file path), `Class` (e.g., `lang-pkgs`), `Type` (e.g., `gomod`), and `Packages` or `Vulnerabilities` arrays.
+
+<Note>
+  **Safety model** — evidence artifacts are indexed, not modified. The skill writes only to `wiki/meta/evidence-index.md` and `wiki/meta/evidence-manifest.json`. It never alters `report.zip` or `security-audit-report.json`. If an artifact comes from a historical repository state, the index note says so explicitly: *"Stored as original audit output; review before using as current truth."*
+</Note>
+
+## Integration with the Wiki
+
+Evidence pages are linked from wiki pages — they are not duplicated. When writing an audit analysis or security note in `wiki/`, reference the evidence index:
+
+```markdown
+See the evidence manifest for checksums and raw artifacts:
+[[wiki/meta/evidence-index]]
+```
+
+This keeps the wiki pages interpretive (human analysis, context, decisions) while the evidence index maintains the unmodified primary artifacts with verifiable checksums.
+
+## When to Use
+
+Run `./bin/evidence-index.sh` (or `evidence-index`) after:
+
+- Completing a security audit or penetration test that produces a `report.zip`
+- Generating a new Trivy/scanner output in `security-audit-report.json`
+- Any operation that produces artifacts you need to preserve with verifiable integrity
+- Before archiving an audit cycle — index the final state so future comparison is possible
+
+To verify integrity later, re-run the script and compare the new SHA256 values against the previously recorded ones in `wiki/meta/evidence-manifest.json`.

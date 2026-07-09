@@ -1,0 +1,280 @@
+---
+title: "CLI Scripts: Operational Shell Commands for Bunker OS"
+sidebarTitle: "CLI Scripts"
+description: "Complete reference for Bunker OS shell scripts — vault health checks, wiki sync, evidence indexing, integrity scans, and the bunker.sh orchestrator."
+---
+
+Bunker OS ships a `bin/` directory of shell scripts that cover the entire operational lifecycle of a vault: session management, health checks, integrity scans, evidence indexing, syncing, alerting, and ingest. Each script resolves its vault path through the `BUNKER_HOME` environment variable or falls back to the repo root, so they work whether you run them from inside the project or reference the vault from another project.
+
+## Environment Variable
+
+Every script in `bin/` uses this pattern to locate the vault root:
+
+```bash
+BUNKER_HOME="${BUNKER_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+```
+
+If you are running scripts from **outside the repo** — for example, from a wrapper project that references the vault — export `BUNKER_HOME` first:
+
+```bash
+export BUNKER_HOME="/path/to/opencode-obsidian"
+./bin/bunker-check.sh
+```
+
+Without it, scripts default to the directory two levels above their own location (the repo root), which is correct for in-repo usage.
+
+## Scripts Reference
+
+| Script | Usage | Description |
+|---|---|---|
+| `bunker.sh` | `./bin/bunker.sh [init\|save\|refresh\|close]` | Session lifecycle orchestrator |
+| `bunker-check.sh` | `./bin/bunker-check.sh` | Full local health check (definition of done) |
+| `wiki-integrity.sh` | `./bin/wiki-integrity.sh` | Scan for orphans and broken links |
+| `evidence-index.sh` | `./bin/evidence-index.sh` | Index evidence artifacts with SHA256 |
+| `wiki-sync.sh` | `./bin/wiki-sync.sh --apply` | Sync and commit wiki changes |
+| `bunker-ingest.sh` | `./bin/bunker-ingest.sh [file]` | CLI ingest trigger |
+| `bunker-alert.sh` | `./bin/bunker-alert.sh <target> <level> <msg>` | Send alert via n8n Ultimate Alerter |
+| `bunker-pulse.sh` | `./bin/bunker-pulse.sh [--apply]` | Triage bug memos from wiki/inbox |
+| `setup-vault.sh` | `./bin/setup-vault.sh` | Initial vault setup |
+| `setup-opencode.sh` | `./bin/setup-opencode.sh` | OpenCode configuration setup |
+| `audit-repo.sh` | `./bin/audit-repo.sh` | Trivy security scan → JSON report |
+| `bunker-scaffold.sh` | `./bin/bunker-scaffold.sh` | Scaffold vault structure |
+| `bunker-push.sh` | `./bin/bunker-push.sh` | Push vault to remote |
+| `bunker-github-setup.sh` | `./bin/bunker-github-setup.sh` | Configure GitHub integration |
+| `setup-multi-agent.sh` | `./bin/setup-multi-agent.sh` | Multi-agent configuration |
+
+## bunker.sh — Session Lifecycle Orchestrator
+
+`bunker.sh` is the top-level orchestrator for session management. It accepts four subcommands:
+
+```bash
+./bin/bunker.sh [init|save|refresh|close]
+```
+
+<Steps>
+  <Step title="init — Start a session">
+    Reads `wiki/hot.md` and the latest handover. Sets `STATUS: READ_HOT_AND_HANDOVER` so the agent knows the context window is primed.
+
+    ```bash
+    ./bin/bunker.sh init
+    ```
+  </Step>
+  <Step title="save — Checkpoint mid-session">
+    Calls `wiki-sync.sh` to stage and commit current changes. Use this to checkpoint long sessions without closing them.
+
+    ```bash
+    ./bin/bunker.sh save
+    ```
+  </Step>
+  <Step title="refresh — Re-read core context">
+    Re-reads `wiki/hot.md`, `wiki/index.md`, and ADRs. Sets `STATUS: RE-READING_HOT_INDEX_AND_ADRS`. Use after a context compaction or long gap.
+
+    ```bash
+    ./bin/bunker.sh refresh
+    ```
+  </Step>
+  <Step title="close — End a session">
+    Generates a handover document and pushes via `wiki-sync.sh`. Sets `STATUS: GENERATE_HANDOVER_AND_PUSH`.
+
+    ```bash
+    ./bin/bunker.sh close
+    ```
+  </Step>
+</Steps>
+
+## bunker-check.sh — Definition of Done
+
+`bunker-check.sh` is the authoritative health check. It runs every pre-push check the vault needs to pass. Run it before pushing to confirm the vault is clean.
+
+```bash
+./bin/bunker-check.sh
+```
+
+It runs six sections sequentially:
+
+<CardGroup cols={2}>
+  <Card title="Bash Syntax" icon="code">
+    Runs `bash -n` on every script in `bin/` to verify they parse without errors.
+  </Card>
+  <Card title="Go Ingest Server Build" icon="server">
+    Attempts `go build` on `bin/ingest_server.go`. Skipped gracefully if `go` is not installed.
+  </Card>
+  <Card title="Forbidden Config File" icon="lock">
+    Checks that `.obsidian/plugins/obsidian-local-rest-api/data.json` is not present in shared artifacts (it must stay local).
+  </Card>
+  <Card title="Hard-coded Path Check" icon="search">
+    Scans `bin/`, `README.md`, and core docs for any hard-coded legacy vault paths that should be replaced with `BUNKER_HOME`.
+  </Card>
+  <Card title="Evidence Index" icon="database">
+    Confirms `wiki/meta/evidence-index.md` and `wiki/meta/evidence-manifest.json` both exist.
+  </Card>
+  <Card title="Wiki Integrity" icon="check-circle">
+    Calls `wiki-integrity.sh` to regenerate the full integrity report and confirm it exits cleanly.
+  </Card>
+</CardGroup>
+
+The script exits with code `1` if any section fails and prints a summary:
+
+```
+== Summary ==
+Bunker check passed.
+```
+
+## wiki-integrity.sh — Vault Integrity Scanner
+
+This script generates both a Markdown and a JSON integrity report without modifying any wiki content (only the report files are written).
+
+```bash
+./bin/wiki-integrity.sh
+```
+
+It produces:
+- `wiki/meta/INTEGRITY-REPORT.md` — human-readable summary
+- `wiki/meta/INTEGRITY-REPORT.json` — machine-readable full report
+
+The scanner checks:
+
+| Check | Description |
+|---|---|
+| Broken links | Wikilinks whose targets cannot be resolved in the vault |
+| Orphan notes | Pages with zero incoming wikilinks (excluding `index.md`, `hot.md`, `log.md`) |
+| Short notes | Active pages under 30 lines (configurable via `BUNKER_SHORT_NOTE_LIMIT`) |
+| Missing frontmatter | Pages without a `--- ... ---` frontmatter block |
+| Unprocessed raw | Files in `.raw/` not mentioned in the ingestion log |
+| Plugin drift | Declared vs. installed Obsidian plugins divergence |
+| Sensitive files | Local `data.json` plugin configs or `.env` files that leaked into the vault |
+| Absolute path refs | Files referencing hard-coded local paths |
+
+The vault path itself is configurable via environment variables:
+
+```bash
+# Override vault location
+export BUNKER_VAULT_DIR="/path/to/wiki"
+export BUNKER_INTEGRITY_REPORT="/path/to/output.md"
+./bin/wiki-integrity.sh
+```
+
+## evidence-index.sh — SHA256 Artifact Indexing
+
+This script indexes evidence artifacts (`report.zip`, `security-audit-report.json`) by computing SHA256 checksums and writing structured metadata.
+
+```bash
+./bin/evidence-index.sh
+```
+
+Outputs:
+- `wiki/meta/evidence-index.md` — Markdown index with hashes and sizes
+- `wiki/meta/evidence-manifest.json` — JSON manifest with full artifact metadata
+
+For ZIP archives, it also indexes every internal entry with its own SHA256. The script runs from `BUNKER_HOME` and never modifies the original artifacts.
+
+## wiki-sync.sh — Safe Commit Helper
+
+`wiki-sync.sh` stages and commits wiki changes. It defaults to **dry-run** — pass `--apply` to actually create the commit.
+
+```bash
+# Dry run (preview only)
+./bin/wiki-sync.sh
+
+# Create the commit
+./bin/wiki-sync.sh --apply
+
+# Custom commit message
+./bin/wiki-sync.sh --apply -m "docs: weekly knowledge update"
+```
+
+<Note>
+The commit stages: `wiki/`, `_templates/`, `bin/`, `docs/`, `*.md`, `.gitignore`, `.obsidian/community-plugins.json`, and the Local REST API plugin's `SECURITY-NOTE.md` and `data.example.json`. The `wiki/` directory itself is **not** gitignored — individual sensitive files within it may be.
+</Note>
+
+In dry-run mode, the script prints what it *would* do without touching git:
+
+```
+DRY RUN: would run: git add wiki/ _templates/ bin/ docs/ *.md
+DRY RUN: would commit with message: chore(wiki): compounding knowledge update 2026-07-02 14:30
+Run with --apply to commit.
+```
+
+## bunker-ingest.sh — CLI Ingest Trigger
+
+Copies a local file to `.raw/` and triggers the ingestion pipeline via `bunker-alert.sh`.
+
+```bash
+./bin/bunker-ingest.sh path/to/document.pdf
+```
+
+The script:
+1. Copies the file to `.raw/`
+2. Fires an `INFO` alert to the n8n Ultimate Alerter webhook with a `NUEVA FUENTE DETECTADA` message
+3. Returns — the agent picks up the source from `.raw/` and processes it
+
+## bunker-alert.sh — n8n Alert Webhook
+
+Sends an alert payload to the n8n Ultimate Alerter webhook at `http://localhost:5678/webhook/bunker-security-alert`.
+
+```bash
+./bin/bunker-alert.sh <target> <level> <message>
+
+# Examples
+./bin/bunker-alert.sh "vault-monitor" "CRITICAL" "evidence index missing"
+./bin/bunker-alert.sh "bunker-ingest" "INFO" "new source detected: report.pdf"
+```
+
+The payload is JSON-encoded via Python and POSTed with `Content-Type: application/json`. The script exits with code `1` if the HTTP response is outside the 2xx range.
+
+## bunker-pulse.sh — Bug Memo Triage
+
+Triages bug memos from `wiki/inbox/` — any file with `type: bug` or `tags: [bug]` in frontmatter. In dry-run mode it previews what would happen; `--apply` creates real GitHub branches, issues, and draft PRs via the `gh` CLI.
+
+```bash
+# Preview mode (default)
+./bin/bunker-pulse.sh
+
+# Actually create branches and issues
+./bin/bunker-pulse.sh --apply
+```
+
+<Warning>
+`--apply` requires the `gh` CLI to be authenticated. It creates git branches, pushes them, opens GitHub issues, and creates draft PRs automatically. Always review in dry-run mode first.
+</Warning>
+
+## Ingest Server (bin/ingest_server.go)
+
+The compiled binary `bin/ingest_server` is an HTTP server written in Go that receives ingest requests over HTTP.
+
+```bash
+# Start with defaults (127.0.0.1:9090)
+./bin/ingest_server
+
+# Custom bind address via env
+BUNKER_INGEST_BIND="127.0.0.1:9091" ./bin/ingest_server
+```
+
+Key properties:
+- Binds to `127.0.0.1:9090` by default — **never `0.0.0.0`**
+- Accepts an optional `BUNKER_INGEST_TOKEN` environment variable; if set, all requests must pass it via `X-Bunker-Token` or `Authorization: Bearer <token>`
+- Body size is capped at 10 MiB (`maxBodyBytes = 10 << 20`)
+- Slugifies filenames to `[a-zA-Z0-9-]`, max 80 characters
+
+Build from source:
+
+```bash
+go build -o bin/ingest_server ./bin/ingest_server.go
+```
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="Testing" href="operations/testing" icon="flask">
+    The test suite that validates every script for syntax, shebang, executables, and secrets.
+  </Card>
+  <Card title="BM25 Retrieval" href="operations/bm25-retrieval" icon="magnifying-glass">
+    Python retrieval scripts that complement the shell toolchain.
+  </Card>
+  <Card title="Security" href="operations/security" icon="shield">
+    Security model, secrets policy, and ingest server hardening.
+  </Card>
+  <Card title="Hooks" href="operations/hooks" icon="bolt">
+    OpenCode lifecycle hooks that call wiki-sync and auto-commit.
+  </Card>
+</CardGroup>

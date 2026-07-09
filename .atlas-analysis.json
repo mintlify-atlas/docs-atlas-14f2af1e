@@ -1,0 +1,103 @@
+{
+  "projectType": "general",
+  "projectName": "Bunker OS",
+  "projectDescription": "A local-first knowledge operating system built on Obsidian and OpenCode that turns AI sessions, research, audits, and decisions into persistent, compounding knowledge through autonomous agentic workflows, BM25 text retrieval, and n8n automation.",
+  "theme": "aspen",
+  "primaryColor": "#848484",
+  "lightColor": "#1a1a1a",
+  "darkColor": "#d3d2d2",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "requirements"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/vault-structure",
+              "concepts/knowledge-lifecycle",
+              "concepts/local-first"
+            ]
+          },
+          {
+            "group": "Skills",
+            "pages": [
+              "skills/overview",
+              "skills/autoresearch",
+              "skills/wiki-ingest",
+              "skills/wiki-query",
+              "skills/think",
+              "skills/evidence-index"
+            ]
+          },
+          {
+            "group": "Automation",
+            "pages": [
+              "automation/n8n-overview",
+              "automation/aoc-pipeline",
+              "automation/dead-letter-queue",
+              "automation/mcp-bridge"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "operations/cli-scripts",
+              "operations/bm25-retrieval",
+              "operations/hooks",
+              "operations/testing",
+              "operations/security"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Persistent compounding wiki with 200+ pages across concepts, entities, and sources",
+    "Autoresearch: 3-round autonomous web research loop with Exa + webfetch",
+    "BM25 text retrieval — pure Python stdlib, zero external dependencies",
+    "13 bundled OpenCode skills for research, ingestion, querying, and more",
+    "n8n async automation with AOC v4 Enterprise pipeline (37 nodes)",
+    "Dead Letter Queue global error handler for all n8n workflows",
+    "Multi-channel alerts via Slack, Telegram, and Discord",
+    "430-test CI suite across 5 suites with GitHub Actions",
+    "OpenCode hooks: SessionStart, PostCompact, PostToolUse, Stop",
+    "Evidence vault with SHA256 checksums and security audit reporting",
+    "/think framework: 10-principle decision process for architectural decisions",
+    "Local-first: all data stays on disk, no cloud required"
+  ],
+  "publicApiSurface": [
+    "autoresearch [topic]",
+    "retrieve [query]",
+    "think [problem]",
+    "ingest [file]",
+    "lint the wiki",
+    "save this",
+    "canvas",
+    "wiki",
+    "bin/bunker.sh [init|save|refresh|close]",
+    "bin/bunker-check.sh",
+    "bin/wiki-integrity.sh",
+    "bin/evidence-index.sh",
+    "bin/wiki-sync.sh --apply",
+    "python3 scripts/retrieve.py build",
+    "python3 scripts/retrieve.py \"query\" --top N",
+    "python3 scripts/retrieve.py status",
+    "make test",
+    "make test-workflows",
+    "make test-wiki",
+    "make test-scripts",
+    "make test-retrieve",
+    "make test-yaml"
+  ]
+}

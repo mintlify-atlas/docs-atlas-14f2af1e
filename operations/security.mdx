@@ -1,0 +1,248 @@
+---
+title: "Security Model and Hardening Guidelines for Bunker OS"
+sidebarTitle: "Security"
+description: "Bunker OS's security model covers secrets management, URL validation in autoresearch, local binding, dry-run defaults, and OWASP-aligned MCP governance practices."
+---
+
+Bunker OS is designed as a local-first system: data stays on disk, automation runs on localhost Docker, and no credentials are ever embedded in source files. The security model is layered — secure defaults in scripts, automated secret scanning in CI, URL hygiene in web research, and network isolation for all HTTP services.
+
+## Safety Model
+
+Five core principles underpin how Bunker OS handles security by default:
+
+<CardGroup cols={2}>
+  <Card title="BUNKER_HOME Resolution" icon="folder">
+    Scripts resolve the vault path via `BUNKER_HOME` or the repo root. No hard-coded paths are permitted in any script.
+  </Card>
+  <Card title="Dry-Run Defaults" icon="eye">
+    All scripts with external effects — `wiki-sync.sh`, `bunker-pulse.sh`, and others — default to dry-run mode. Pass `--apply` to commit real changes.
+  </Card>
+  <Card title="Localhost Binding" icon="network-wired">
+    The ingest server binds to `127.0.0.1:9090` by default. n8n exposes only on `localhost:5678`. Neither service binds to `0.0.0.0`.
+  </Card>
+  <Card title="Evidence Immutability" icon="database">
+    Evidence artifacts are indexed with SHA256 checksums via `evidence-index.sh` but never modified. The index links to originals; it does not alter them.
+  </Card>
+</CardGroup>
+
+The fifth principle: **n8n secrets are managed via `.env` (gitignored) and the n8n credential vault** — never in workflow JSON files or source code.
+
+## Secrets Management
+
+### What Lives Where
+
+| Credential | Storage |
+|---|---|
+| OpenRouter API key | n8n credential vault + `.env` |
+| GitHub PAT | n8n credential vault + `.env` |
+| Slack webhook URL | n8n credential vault |
+| Telegram bot token | n8n credential vault |
+| Discord webhook URL | n8n credential vault |
+| `BUNKER_INGEST_TOKEN` | Environment variable only |
+| Obsidian Local REST API key | Local `.obsidian/plugins/obsidian-local-rest-api/data.json` (gitignored) |
+
+### gitignore Enforcement
+
+The `.env` file in `automation/n8n-lab/` is gitignored. The `.obsidian/plugins/obsidian-local-rest-api/data.json` file is checked by `bunker-check.sh` — if it appears in a sharable artifact, the health check fails.
+
+<Warning>
+Never commit `.env` files, API keys, tokens, or credentials to the repository. The test suite scans for secret patterns on every `make test` run, but human review before push is the strongest defense.
+</Warning>
+
+### Automated Secrets Scanning
+
+Every `make test` invocation runs `tests/test_scripts.sh`, which scans all `bin/*.sh` files for six secret patterns:
+
+```bash
+'sk-[a-zA-Z0-9]{20,}'           # OpenAI API keys
+'ghp_[a-zA-Z0-9]{20,}'          # GitHub Personal Access Tokens
+'gho_[a-zA-Z0-9]{20,}'          # GitHub OAuth tokens
+'AKIA[0-9A-Z]{16}'              # AWS Access Key IDs
+'AIza[0-9A-Za-z_-]{20,}'        # Google API keys
+'xox[baprs]-[0-9A-Za-z-]{10,}'  # Slack tokens
+```
+
+Any match breaks the CI build before the code reaches `main`. Run locally before pushing:
+
+```bash
+make test-scripts
+```
+
+## Ingest Server Hardening
+
+The Go ingest server (`bin/ingest_server`) is the only network-facing service owned by Bunker OS. Its defaults are hardened:
+
+```go
+bind := envDefault("BUNKER_INGEST_BIND", "127.0.0.1:9090")
+```
+
+<Warning>
+Never run the ingest server bound to `0.0.0.0`. This would expose the server to the local network and potentially the internet. The default `127.0.0.1:9090` is the only safe configuration for a local development machine.
+</Warning>
+
+Additional hardening in the ingest server:
+- **Token authentication**: Set `BUNKER_INGEST_TOKEN` to require `X-Bunker-Token` or `Authorization: Bearer <token>` on every request. Uses `subtle.ConstantTimeCompare` to prevent timing attacks.
+- **Body size cap**: Requests are truncated at 10 MiB (`maxBodyBytes = 10 << 20`).
+- **Filename sanitization**: Incoming filenames are slugified to `[a-zA-Z0-9-]` with a maximum of 80 characters.
+
+```bash
+# Start with token authentication
+BUNKER_INGEST_TOKEN="your-secret-token" ./bin/ingest_server
+
+# Custom bind address (localhost only)
+BUNKER_INGEST_BIND="127.0.0.1:9091" ./bin/ingest_server
+```
+
+## URL Validation in Autoresearch
+
+The `autoresearch` skill enforces strict URL hygiene before fetching any external content. This prevents server-side request forgery (SSRF) and script injection from external sources.
+
+### Rejected URL Schemes
+
+The skill rejects these schemes outright:
+
+| Scheme | Reason |
+|---|---|
+| `file://` | Local filesystem access |
+| `javascript:` | Script injection |
+| `data:` | Embedded content injection |
+
+### Rejected Hosts
+
+- RFC1918 private addresses: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
+- Localhost: `127.0.0.1`, `::1`, `localhost`
+- Hosts not discovered via the search step — the fetch whitelist is dynamically built from search results only
+
+### Content Sanitization
+
+After fetching external content, the skill sanitizes HTML before writing it to the wiki:
+
+- Strips `<script>`, `<iframe>`, and `<style>` tags
+- Escapes `[[` and `]]` in external content to prevent wikilink injection
+- Truncates content to 50 KB before processing
+
+## MCP Security
+
+Bunker OS integrates with Obsidian via the Local REST API plugin. This plugin exposes an HTTP API on localhost that requires an API key.
+
+### Local REST API
+
+- **Default binding**: `127.0.0.1:27124`
+- **API key**: Generated on first use and stored in `.obsidian/plugins/obsidian-local-rest-api/data.json`
+- **Keep the key confidential**: Do not share it in `AGENTS.md`, `PROJECT.md`, or any committed file
+- The `bunker-check.sh` health check explicitly fails if `data.json` appears in a shareable artifact
+
+The plugin ships with a `SECURITY-NOTE.md` and a `data.example.json` (showing the key format with a placeholder). These are committed; `data.json` with the real key is not.
+
+### n8n MCP Bridge
+
+For the n8n MCP bridge:
+- Use OAuth credentials configured in the n8n credential vault, not static Bearer tokens
+- n8n itself must never bind to `0.0.0.0` in production without a reverse proxy with SSL
+- Configure `x-aoc-secret` in the AOC v4 webhook before activating the workflow
+
+```bash
+# Verify n8n is not exposed to the network
+# Should show 127.0.0.1:5678, not 0.0.0.0:5678
+ss -tlnp 2>/dev/null | grep 5678
+```
+
+## n8n Workflow Security
+
+The AOC v4 Enterprise pipeline includes built-in security controls:
+
+- **Webhook authentication**: `x-aoc-secret` header validation at ingress
+- **Rate limiting**: Per-source rate limiting in the ingress guard node
+- **Secret redaction**: Sensitive fields are redacted from logs and webhook payloads
+- **Dry-run mode**: `AOC_DRY_RUN=true` is the recommended default until the pipeline is fully configured
+
+## BUNKER_RULES Technical Standards
+
+The `BUNKER_RULES.md` governance document defines security-relevant technical standards enforced across all code in the vault:
+
+### Go
+- **Architecture**: Hexagonal / Clean Architecture only — no ad-hoc business logic in HTTP handlers
+- **Concurrency**: `errgroup` for structured concurrency — no raw goroutine leaks
+- **Logging**: `slog` with JSON output — no `fmt.Print` in production paths
+- **Database**: `pgx/v5` with zero-downtime migrations
+
+### React / Next.js
+- **Version**: React 19 / Next.js 15+ with Server Components by default
+- **Styling**: Tailwind CSS v4 with CSS-first config
+
+### Infrastructure
+- **IaC**: OpenTofu with encrypted state — never plain Terraform with local state
+- **Scanning**: Mandatory Trivy scans (`bin/audit-repo.sh`) before sharing build artifacts
+- **Attestations**: SLSA Level 1 attestations for CI-built artifacts
+- **Secrets in CI**: Zero keys in code — ephemeral OIDC tokens only
+
+Run a Trivy audit locally:
+
+```bash
+./bin/audit-repo.sh
+# → Generates security-audit-report.json
+```
+
+Index the resulting report into the evidence vault:
+
+```bash
+./bin/evidence-index.sh
+# → Updates wiki/meta/evidence-index.md with SHA256 checksums
+```
+
+## Security Verification Checklist
+
+Run these commands before sharing vault artifacts or making the repo public:
+
+```bash
+# 1. Verify no secrets in any script
+make test-scripts
+
+# 2. Verify vault integrity and no sensitive files leaked
+./bin/bunker-check.sh
+
+# 3. Verify n8n is not network-exposed
+ss -tlnp 2>/dev/null | grep 5678 | grep -v 0.0.0.0
+
+# 4. Run a full security scan
+./bin/audit-repo.sh
+
+# 5. Verify evidence index is up to date
+./bin/evidence-index.sh
+```
+
+## Reporting Vulnerabilities
+
+If you find a security vulnerability in Bunker OS, **do not open a public GitHub issue**.
+
+Contact directly:
+- **GitHub**: [@SamBleed](https://github.com/SamBleed)
+- **Repo**: [SamBleed/opencode-obsidian](https://github.com/SamBleed/opencode-obsidian)
+
+Vulnerabilities will be acknowledged within **48 business hours**.
+
+**Scope covered by this policy:**
+- OpenCode skills in `skills/`
+- Scripts in `bin/` and `scripts/`
+- n8n workflows in `automation/n8n-lab/`
+- Hooks in `hooks/hooks.json`
+- Tests in `tests/`
+
+See [SECURITY.md](https://github.com/SamBleed/opencode-obsidian/blob/main/SECURITY.md) for the full responsible disclosure policy.
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="CLI Scripts" href="operations/cli-scripts" icon="terminal">
+    The scripts that implement secure defaults — dry-run, BUNKER_HOME, local binding.
+  </Card>
+  <Card title="Testing" href="operations/testing" icon="flask">
+    The test suite that automates secrets scanning and vault integrity checks.
+  </Card>
+  <Card title="Autoresearch" href="skills/autoresearch" icon="globe">
+    URL validation and content sanitization details for the research skill.
+  </Card>
+  <Card title="Automation Overview" href="automation/n8n-overview" icon="diagram-project">
+    n8n webhook authentication and rate limiting in the AOC pipeline.
+  </Card>
+</CardGroup>

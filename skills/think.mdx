@@ -1,0 +1,138 @@
+---
+title: "Think: 10-Principle Framework for Architectural Decisions"
+sidebarTitle: "Think"
+description: "The /think skill guides you through 10 cognitive principles for complex decisions — from external observation through acceptance to creative synthesis."
+---
+
+The `think` skill applies a structured 10-stage reasoning loop to problems that are too consequential or complex to answer instinctively. It is a meditation, a discipline, and a checklist — designed for non-trivial architectural decisions, audits, post-mortems, technical evaluations, and moments where you need to know what you're missing before shipping. The 10 stages are not a recipe; they are **stages of attention**, each one feeding the next.
+
+The skill's core insight is that the stages most people skip — `OBSERVE (internal)`, `ACCEPT`, and `GROW` — are the ones most likely to produce calibration failures and compounding errors. The framework is explicit: do not skip the uncomfortable stages.
+
+## Trigger Phrases
+
+```
+/think [problem statement]
+think this through
+think [problem]
+structured reasoning
+systematic thinking
+analicemos
+auditar decisión
+deep think
+qué me estoy perdiendo
+```
+
+## When to Use
+
+Use `/think` for:
+
+- **Architectural decisions** — choosing between technologies, infrastructure designs, data models
+- **Audits** — evaluating a system, codebase, or process with a methodology
+- **Post-mortems** — analyzing what went wrong and why, without anchoring on the first explanation
+- **Ambiguous requests** — when the user's intent is unclear and you need to listen before acting
+- **Technical evaluations** — comparing options with multi-dimensional tradeoffs
+- **Pre-ship verification** — checking ACCEPT before calling something "done"
+
+Do **not** use `/think` for single-line fixes, trivial lookups, or cases where you've already implicitly worked through all 10 stages. The value scales with **novelty × irreversibility**.
+
+## The 10 Stages
+
+<Steps>
+  <Step title="OBSERVE (external input)">
+    Thinking begins with raw data collection. Look at the environment, the current landscape, patterns, inefficiencies, and opportunities — without trying to solve them immediately. Read the code before changing it. Read the wiki before responding. Resist the impulse to jump to a solution at the first symptom.
+
+    *Prompts: What are the raw inputs? What did I read completely vs. what did I assume? What is the current state (working tree, tests, deploy)? What surprises me, before I start interpreting?*
+  </Step>
+  <Step title="OBSERVE (internal metacognition)">
+    Now observe yourself. Are you operating on assumptions? Do you have bias toward this architecture? Are you anchored to a previous decision? Write a "bias log" paragraph before deciding. Note ship-it bias, familiarity bias, anchoring, belonging bias. The bias doesn't disappear by noticing it — it gets contained.
+
+    *Prompts: Where am I biased? What outcome am I unconsciously expecting? If a fresh-context reviewer joined now, what would they question that I take for granted? Is my confidence calibrated to the evidence I actually have?*
+  </Step>
+  <Step title="LISTEN (active receptivity)">
+    Observing is visual or analytical. Listening requires turning off the ego to absorb external feedback. Pay attention to the user's exact intent, error messages, and subtle signals in the noise.
+
+    *Prompts: What did the user ask exactly (verbatim)? What signals are in the noise? What domain signals should I check (GitHub issues, docs, neighboring patterns)?*
+  </Step>
+  <Step title="THINK (critical processing)">
+    The analytical engine. Once you have the inputs, break the problem into first principles. Structure the logic, map the flows, evaluate constraints, synthesize raw data into a coherent strategy. Read before writing. Name things as if the next reader is hostile. Find the smallest unit that works. Delete more than you add. Evidence over intuition. The failure mode is the spec.
+
+    *Prompts: What are the first principles? What alternatives haven't I considered? What is the cheapest experiment that would prove me wrong?*
+  </Step>
+  <Step title="CONNECT (lateral thinking)">
+    Great ideas rarely happen in isolation — they happen at intersections. Take two apparently unrelated concepts and connect them. When auditing a skill, ask: does this bug exist in neighboring skills? When designing an API, ask: what other interface is this isomorphic to?
+
+    *Prompts: Where else does this pattern appear? What apparently unrelated domain solved a structurally similar problem? If this bug exists here, does it exist in three adjacent files?*
+  </Step>
+  <Step title="CONNECT (systemic orchestration)">
+    The second CONNECT is about execution — moving from an isolated idea to an integrated system. How do these pieces plug together to create a functional whole? A skill that works in isolation but breaks the test pipeline is not a skill that works.
+
+    *Prompts: How does this plug into the existing wiring (hooks, scripts, Makefile, skills)? What needs updating upstream/downstream? What new failure modes does the integration create that the isolated component didn't have?*
+  </Step>
+  <Step title="FEEL (emotional intelligence + intuition)">
+    Pure logic is fragile without empathy. Design with the user's experience in mind. Trust hard-won intuition when data is ambiguous. An error message that says "ERR: exit code 4" fails FEEL even if it passes THINK.
+
+    *Prompts: How does this land for the user? What emotional state is the user in when they hit this code? Does my intuition say "something is wrong" even if the data says "we're fine"?*
+  </Step>
+  <Step title="ACCEPT (intellectual humility)">
+    No plan survives first contact with reality. Embrace constraints. Acknowledge when a hypothesis fails. Let go of sunk cost. Score your findings honestly — if a test is 78/100, don't write 95/100. If the verdict is YELLOW, don't call it GREEN. ACCEPT is the firewall against sycophancy.
+
+    *Prompts: What is the honest tier of this finding (no inflation)? What constraint am I being asked to relax that I shouldn't? What sunk cost am I protecting that I should release?*
+  </Step>
+  <Step title="CREATE (generative output)">
+    Analysis paralysis is the enemy of progress. At some point, stop strategizing and start producing. Write the code. Ship the report. A B+ audit that ships is better than a perfect audit that never does. A committed fix is better than the same fix rotting in the working tree.
+
+    *Prompts: What is the smallest artifact that ships the decision? What is the cleanest path from here to "done"? Ship it.*
+  </Step>
+  <Step title="GROW (the iterative loop)">
+    Thinking is not a straight line — it's a feedback loop. Take what you built (CREATE), observe how it works in reality, and use those lessons to improve the next cycle. Every audit must end with a GROW section. What worked? What to improve? Where should this lesson be stored for the future-you not to re-derive it?
+
+    *Prompts: What worked well in this cycle? What would I do differently next time? Where should I save this lesson — wiki, hot.md, or an ADR?*
+  </Step>
+</Steps>
+
+## Example Usage
+
+```
+/think should we use PostgreSQL or SQLite for the n8n backend?
+```
+
+The skill walks through all 10 stages:
+
+- **OBSERVE (external)**: reads current n8n docker-compose config, checks what database is configured, reads `wiki/hot.md` for recent infrastructure context
+- **OBSERVE (internal)**: notes any familiarity bias toward one database, checks if previous decisions anchor the recommendation
+- **LISTEN**: re-reads the exact question — "for the n8n backend" is the constraint, not a general comparison
+- **THINK**: maps first principles — n8n's concurrency model, volume of execution data, deployment environment (single node vs. horizontal scale), data persistence requirements
+- **CONNECT (lateral)**: notes that SQLite works for small n8n instances and PostgreSQL is required for queue mode and horizontal scaling — maps this to the project's scale expectations
+- **CONNECT (systemic)**: checks how the choice integrates with the existing Docker compose file, backup strategy, and CI environment variables
+- **FEEL**: considers the operational experience of whoever maintains this — SQLite is simpler, PostgreSQL has more operational surface area
+- **ACCEPT**: honestly scores both options given actual project constraints, does not inflate confidence
+- **CREATE**: produces a clear recommendation with rationale
+- **GROW**: notes the decision criteria for future infrastructure decisions, saves to `wiki/meta/` as an ADR
+
+The output is a structured analysis with a clear recommendation. Significant architectural decisions from `/think` sessions are saved to `wiki/meta/` as Architecture Decision Records (ADRs) using `/save decision [name]` — a requirement in the Bunker's governance rules (`BUNKER_RULES.md`).
+
+## Anti-Patterns
+
+The loop fails under these conditions:
+
+| Anti-pattern | Effect |
+|---|---|
+| Skipping OBSERVE (internal) | Confidently wrong answers — analysis proceeds without auditing bias |
+| Skipping ACCEPT | Inflated scores, sycophantic verdicts; calling YELLOW "GREEN with disclosure" |
+| Skipping GROW | Nothing compounds; the next cycle starts from the same baseline |
+| Paralysis in THINK | Looping inside stage 4 indefinitely without reaching CREATE |
+| Ceremony | Writing all 10 stages for a one-line fix; overkill kills the framework's value |
+
+## Composition with Other Skills
+
+The `think` skill composes naturally with the rest of the Bunker skill set:
+
+| Stage | Skill that amplifies it |
+|---|---|
+| OBSERVE (external) | `wiki-query` — read the wiki before deciding |
+| LISTEN | `autoresearch` — research external signals before deciding |
+| OBSERVE (internal) | `code-review` (ECC) — fresh-context reviewer that catches bias |
+| GROW | `wiki/hot.md` — where GROW outputs go for the next session |
+| Full loop | `Makefile test` — the test pipeline tells you if CREATE worked |
+
+Outputs of `/think` sessions — especially the CREATE and GROW stages — should be saved with `/save decision [name]` so they persist as ADRs in `wiki/meta/`.

@@ -1,20 +1,84 @@
 ---
-title: "Introduction"
-description: "Welcome to your project"
+title: "Bunker OS: Local-First Knowledge Operating System"
+sidebarTitle: "Home"
+description: "Bunker OS turns AI sessions, research, audits, and decisions into persistent, compounding knowledge — powered by OpenCode, Obsidian, BM25 retrieval, and n8n automation."
 ---
 
-Write a short description of your product here. What it does, who it's for, and what they can accomplish with it.
+Bunker OS is a local-first knowledge operating system built on [Obsidian](https://obsidian.md) and [OpenCode](https://opencode.ai). Every source you ingest, every research session you run, and every architectural decision you make gets filed into a structured, cross-referenced wiki that compounds in value over time. Nothing leaves your machine unless you push it.
 
-<Tip>
-  Ready to make this your own? Start by editing this page. Update your `docs.json` file to customize your site. Then fill out the [Quickstart](/quickstart) page.
-</Tip>
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Clone the vault, open it in Obsidian and OpenCode, and run your first research in under 5 minutes.
+  </Card>
+  <Card title="Skills Reference" icon="wand-magic-sparkles" href="/skills/overview">
+    Explore the 13 bundled OpenCode skills — from autonomous research to wiki linting.
+  </Card>
+  <Card title="n8n Automation" icon="bolt" href="/automation/n8n-overview">
+    Async pipelines, multi-channel alerts, and the AOC v4 Enterprise workflow.
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Understand the layers: capture, normalize, classify, evidence, automation, and retrieval.
+  </Card>
+</CardGroup>
 
-<Card title="Quickstart" icon="rocket" href="/quickstart">
-  This card links to the quickstart page in your project.
-</Card>
-<Card title="Components" icon="puzzle-piece" href="https://mintlify.com/docs/components">
-  Add cards, callouts, steps, tabs, and more to design and structure your pages.
-</Card>
-<Card title="Settings" icon="gear" href="https://mintlify.com/docs/organize/settings">
-  Set your site name, branding, and navigation in the `docs.json` file.
-</Card>
+## What Bunker OS Does
+
+Bunker OS is not a traditional app. It is an operations system that wraps Obsidian (your vault) and OpenCode (your AI agent) into a disciplined, automated pipeline:
+
+- **Captures** sources into `.raw/` and ingests them into a structured wiki
+- **Researches** topics autonomously across 3 iterative rounds with Exa
+- **Retrieves** knowledge instantly with BM25 text search — no embeddings, no LLM calls
+- **Automates** async workflows with n8n: alerts, issue creation, error handling
+- **Tests** its own integrity with 430 tests across 5 suites on every push
+
+<Steps>
+  <Step title="Clone the vault">
+    ```bash
+    git clone https://github.com/SamBleed/opencode-obsidian.git
+    cd opencode-obsidian
+    ```
+  </Step>
+  <Step title="Open in Obsidian">
+    In Obsidian: **Manage Vaults → Open folder as vault → select `opencode-obsidian/`**
+  </Step>
+  <Step title="Open OpenCode in the same folder">
+    Launch OpenCode from inside the `opencode-obsidian/` directory so it picks up the `AGENTS.md`, skills, and hooks automatically.
+  </Step>
+  <Step title="Start your first session">
+    ```
+    autoresearch zero-trust architecture
+    ```
+    Bunker OS will decompose the topic, run 3 rounds of web research, and file structured wiki pages — sources, concepts, entities — automatically.
+  </Step>
+</Steps>
+
+## Key Capabilities
+
+<CardGroup cols={3}>
+  <Card title="Autoresearch" icon="magnifying-glass" href="/skills/autoresearch">
+    3-round autonomous research with Exa + webfetch. Files sources, concepts, and entities directly to the wiki.
+  </Card>
+  <Card title="BM25 Retrieval" icon="database" href="/operations/bm25-retrieval">
+    Pure Python stdlib search over the entire wiki. No embeddings, no API keys, no external services.
+  </Card>
+  <Card title="/think Framework" icon="brain" href="/skills/think">
+    10-principle decision framework for architectural choices, audits, and post-mortems.
+  </Card>
+  <Card title="Wiki Ingest" icon="file-import" href="/skills/wiki-ingest">
+    Drop any file in `.raw/` and say `ingest [filename]`. Entities and concepts extracted automatically.
+  </Card>
+  <Card title="n8n Pipelines" icon="diagram-next" href="/automation/n8n-overview">
+    AOC v4 Enterprise: 37-node pipeline with AI triage, GitHub issue creation, and Slack/Telegram/Discord alerts.
+  </Card>
+  <Card title="430 Tests + CI" icon="circle-check" href="/operations/testing">
+    5 test suites: n8n workflow connections, vault integrity, script validation, YAML, and BM25 retrieval.
+  </Card>
+</CardGroup>
+
+## Built on the LLM Wiki Pattern
+
+Bunker OS is grounded in Andrej Karpathy's [LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f): the agent writes to a persistent knowledge base rather than answering in chat. Answers cite specific wiki pages, not model training data. Knowledge compounds like interest — each session makes every future session smarter.
+
+<Note>
+  Bunker OS complements rather than replaces [claude-obsidian](https://github.com/AgriciDaniel/claude-obsidian). Where claude-obsidian is a researcher and second brain, Bunker OS is an operator. Both can point at the same vault simultaneously.
+</Note>

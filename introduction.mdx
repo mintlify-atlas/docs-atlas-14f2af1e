@@ -1,0 +1,104 @@
+---
+title: "Bunker OS: Local-First Knowledge Operating System"
+sidebarTitle: "Introduction"
+description: "Bunker OS is a local-first knowledge OS built on Obsidian and OpenCode. Learn what it does, why it exists, and how it differs from other tools."
+---
+
+Bunker OS is a local-first knowledge operating system built on Obsidian and OpenCode. It turns AI sessions, research, audits, evidence, and decisions into persistent operational assets — with async automation via n8n, fast text retrieval via BM25, and a full orchestration pipeline purpose-built for OpenCode. Version 1.3.1 ships with 430 passing tests, 13 bundled skills, and a complete n8n automation layer including a Dead Letter Queue and multi-channel alerting.
+
+## What Bunker OS Is
+
+Bunker OS is not a personal knowledge manager. It is an **operations system** — a platform for agents and humans to work together on research, security audits, infrastructure decisions, and project intelligence, with everything persisted as plain Markdown in an Obsidian vault on your local disk.
+
+The core insight comes from Andrej Karpathy's [LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f): rather than feeding every AI session the same raw documents, you maintain a persistent, cross-referenced wiki that grows richer with each session. Knowledge compounds like interest. Every `autoresearch`, every `ingest`, every `think` session leaves behind structured artifacts — entities, concepts, source summaries, ADRs — that every future session can draw from without re-reading the originals.
+
+<Note>
+  Bunker OS complements, rather than competes with, [claude-obsidian](https://github.com/AgriciDaniel/claude-obsidian). Where claude-obsidian is a researcher and second brain, Bunker OS is an operator. Both can coexist pointing at the same Obsidian vault.
+</Note>
+
+## The Operations-First Difference
+
+Bunker OS forked from claude-obsidian but evolved in a fundamentally different direction. While claude-obsidian excels at PKM methodologies (LYT, PARA, Zettelkasten) and multi-writer safety, Bunker OS is built around the operational concerns that matter most to developers and security engineers: automation pipelines, evidence preservation, error handling, and measurable test coverage.
+
+Key differentiators from any other AI-Obsidian integration:
+
+- **n8n async automation** — a full Docker-based workflow engine with webhooks, AI triage, GitHub issue creation, and Slack/Telegram/Discord notifications. No other comparable tool has this.
+- **Dead Letter Queue** — a global n8n error trigger that catches failures from every workflow in the instance, classifies severity, and persists the last 200 errors.
+- **Evidence vault** — `report.zip` and `security-audit-report.json` are indexed with SHA256 checksums so audit artifacts are verifiable.
+- **430 tests across 5 suites** — the codebase is CI-tested on every push and PR to `main` via GitHub Actions.
+- **BM25 text retrieval** — pure Python stdlib, zero dependencies, no embeddings, no external API calls. The agent is the only intelligence in the retrieval loop.
+
+## Architecture Layers
+
+Bunker OS organizes itself into ten conceptual layers that map directly to folders, scripts, and skills in the repository:
+
+| Layer | What it covers |
+|---|---|
+| **Capture** | `wiki/inbox`, `.raw/`, ingest server, session handovers |
+| **Normalize** | `_templates/`, `skills/wiki-ingest` |
+| **Classify** | `wiki/sources`, `wiki/entities`, `wiki/concepts`, `wiki/projects` |
+| **Evidence** | `report.zip`, `security-audit-report.json`, evidence index with SHA256 |
+| **Governance** | `BUNKER_RULES.md`, ADR templates, knowledge supply chain |
+| **Automation** | `bin/` for sync ops, n8n for async flows, alerts, and DLQ |
+| **Retrieval** | BM25 index (pure Python, zero deps) + OpenCode synthesis |
+| **Testing** | 5 suites: n8n workflows, wiki integrity, scripts, YAML, retrieve |
+| **Agent Runtime** | 3 agents, commands, 13 skills, 7 hooks across 4 events |
+| **Visualization** | Dashboard, canvases, Obsidian graph view |
+
+## Who It's For
+
+Bunker OS is designed for three primary audiences:
+
+- **Developers using OpenCode** who want AI sessions to accumulate knowledge rather than restart from scratch each time
+- **Security researchers and DevOps engineers** who need to preserve audit evidence, track vulnerability decisions, and run automated remediation pipelines
+- **Power users** who want async workflows and multi-channel alerting wired directly to their knowledge base
+
+## Comparison with claude-obsidian
+
+| Dimension | Bunker OS | claude-obsidian |
+|---|---|---|
+| Version | v1.3.1 | v1.9.2 |
+| Purpose | Operations + automation + security | PKM / second brain |
+| Harness | OpenCode | Claude Code (plugin) |
+| Skills | 13 operational | 15 research |
+| Async automation | n8n on Docker | None |
+| Text retrieval | BM25 (delegates to agent) | BM25 + API + rerank |
+| Tests | 430 (5 suites) | ~1,240 (9 suites) |
+| Evidence checksums | ✅ | ❌ |
+| Dead Letter Queue | ✅ | ❌ |
+| Multi-channel alerts | Slack / Telegram / Discord | ❌ |
+| Multi-methodology | ❌ | LYT / PARA / Zettelkasten |
+| Multi-writer safe | ❌ | ✅ |
+
+## Explore Bunker OS
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Clone the vault, open it in Obsidian and OpenCode, verify hooks, and run your first autonomous research session in minutes.
+  </Card>
+  <Card
+    title="Requirements"
+    icon="list-check"
+    href="/requirements"
+  >
+    Hardware, software, and optional dependencies — OpenCode, Obsidian v1.6+, Python 3.10+, Docker, and more.
+  </Card>
+  <Card
+    title="Skills Overview"
+    icon="wand-magic-sparkles"
+    href="/skills/overview"
+  >
+    Explore all 13 bundled OpenCode skills: autoresearch, think, wiki-ingest, wiki-retrieve, canvas, and more.
+  </Card>
+  <Card
+    title="n8n Automation"
+    icon="bolt"
+    href="/automation/n8n-overview"
+  >
+    Set up the n8n async pipeline with AOC v4 Enterprise, Dead Letter Queue, Health Check, and multi-channel alerting.
+  </Card>
+</CardGroup>

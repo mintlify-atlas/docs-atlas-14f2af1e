@@ -1,0 +1,246 @@
+---
+title: "OpenCode Hooks: Automated Session Lifecycle Management"
+sidebarTitle: "Hooks"
+description: "Bunker OS configures 7 OpenCode hooks across 4 events — SessionStart, PostCompact, PostToolUse, and Stop — to automate context loading, git commits, and handover generation."
+---
+
+Bunker OS uses OpenCode's hook system to wire the vault lifecycle directly into the agent's execution model. Without hooks, every session would start cold — the agent would have no knowledge of recent work until it was told explicitly. With hooks, context loading, mid-session commits, and hot cache updates all happen automatically at the right moments.
+
+## What OpenCode Hooks Are
+
+OpenCode hooks are JSON-configured triggers defined in `hooks/hooks.json`. Each hook fires at a named lifecycle event and runs either a shell **command** or injects a **prompt** into the conversation. Hooks run automatically — no manual invocation needed.
+
+The file is loaded from the repo root by OpenCode. The path is `hooks/hooks.json`.
+
+## The 4 Hook Events
+
+Bunker OS defines **7 hooks** across **4 events**:
+
+| Event | Hooks | Purpose |
+|---|:---:|---|
+| `SessionStart` | 2 | Load hot cache when a session begins or resumes |
+| `PostCompact` | 2 | Reload hot cache after context compaction |
+| `PostToolUse` | 1 | Auto-commit changes to skills, scripts, and tests |
+| `Stop` | 2 | Update hot.md if the wiki was modified |
+
+## Full hooks.json
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f wiki/hot.md ] && echo '=== HOT CACHE ===' && cat wiki/hot.md && echo '=== END HOT CACHE ===' || true"
+          },
+          {
+            "type": "prompt",
+            "prompt": "If wiki/hot.md exists in the current directory, silently read it to restore recent context. Do not announce this."
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f wiki/hot.md ] && echo '=== POST-COMPACT: reloading hot cache ===' && cat wiki/hot.md || true"
+          },
+          {
+            "type": "prompt",
+            "prompt": "Hook-injected context does not survive context compaction. If wiki/hot.md exists, silently re-read it to restore context. Do not announce this."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -d .git ] || exit 0; git add -- skills/ scripts/ tests/ Makefile hooks/hooks.json 2>/dev/null; (git diff --cached --quiet || git commit -m \"chore: auto-commit $(date '+%Y-%m-%d %H:%M')\" 2>/dev/null) || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$PWD\" && [ -d wiki ] && git diff --name-only HEAD 2>/dev/null | grep -q '^wiki/' && echo 'WIKI_CHANGED: wiki was modified this session. Update wiki/hot.md with a brief summary (under 500 words). Use format: Last Updated, Key Recent Facts, Recent Changes, Active Threads. Keep it factual. Overwrite the file completely.' || true"
+          },
+          {
+            "type": "prompt",
+            "prompt": "If wiki was modified, update wiki/hot.md before finishing. Include: what was created/modified, key decisions, next steps. Keep it under 500 words. Overwrite completely."
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## SessionStart (2 hooks)
+
+**Matcher:** `startup|resume`
+
+These two hooks fire when a session starts or resumes. Together they ensure the hot cache is always loaded at the beginning of every session.
+
+<Steps>
+  <Step title="Command hook — echo hot cache">
+    Runs a shell command that reads `wiki/hot.md` and echoes it between `=== HOT CACHE ===` delimiters. The content appears in the terminal output so OpenCode sees it immediately.
+
+    ```bash
+    [ -f wiki/hot.md ] && echo '=== HOT CACHE ===' && cat wiki/hot.md && echo '=== END HOT CACHE ===' || true
+    ```
+
+    If `wiki/hot.md` does not exist (fresh vault), the command exits silently via `|| true`.
+  </Step>
+  <Step title="Prompt hook — silent context restore">
+    Injects a prompt instructing OpenCode to read `wiki/hot.md` silently and restore recent context without announcing it. This is the agent-level complement to the command output.
+
+    > "If wiki/hot.md exists in the current directory, silently read it to restore recent context. Do not announce this."
+  </Step>
+</Steps>
+
+## PostCompact (2 hooks)
+
+**Matcher:** `` (matches all compactions)
+
+Context compaction is Claude's mechanism for summarizing old conversation turns when the context window fills up. The problem: hook-injected context from `SessionStart` does not survive compaction. The `PostCompact` hooks re-inject the hot cache immediately after compaction.
+
+<Steps>
+  <Step title="Command hook — reload hot cache">
+    Re-reads `wiki/hot.md` with a `=== POST-COMPACT: reloading hot cache ===` prefix so the reload is visible in the terminal.
+
+    ```bash
+    [ -f wiki/hot.md ] && echo '=== POST-COMPACT: reloading hot cache ===' && cat wiki/hot.md || true
+    ```
+  </Step>
+  <Step title="Prompt hook — silent re-read">
+    Instructs the agent to silently re-read `wiki/hot.md` after compaction without announcing it:
+
+    > "Hook-injected context does not survive context compaction. If wiki/hot.md exists, silently re-read it to restore context. Do not announce this."
+  </Step>
+</Steps>
+
+<Note>
+Context compaction is the silent killer of persistent context. Without `PostCompact` hooks, long sessions would lose all hot cache context mid-conversation. The double approach (command + prompt) ensures the reload happens at both the shell and reasoning levels.
+</Note>
+
+## PostToolUse (1 hook)
+
+**Matcher:** `Write|Edit`
+
+This hook fires after every `Write` or `Edit` tool call. It automatically stages and commits changes to a fixed set of tracked paths.
+
+```bash
+[ -d .git ] || exit 0
+git add -- skills/ scripts/ tests/ Makefile hooks/hooks.json 2>/dev/null
+(git diff --cached --quiet || git commit -m "chore: auto-commit $(date '+%Y-%m-%d %H:%M')" 2>/dev/null) || true
+```
+
+**What it does:**
+1. Exits immediately if not in a git repository
+2. Stages `skills/`, `scripts/`, `tests/`, `Makefile`, and `hooks/hooks.json`
+3. Commits with message `chore: auto-commit YYYY-MM-DD HH:MM` if there are staged changes
+4. The `|| true` at the end prevents hook failure from aborting the agent
+
+**Commit message format:** `chore: auto-commit 2026-07-02 14:35`
+
+<Note>
+The auto-commit hook only touches the explicitly listed paths: `skills/`, `scripts/`, `tests/`, `Makefile`, and `hooks/hooks.json`. The `wiki/` directory is **not** auto-committed by this hook — wiki changes are handled by the `Stop` hook and `wiki-sync.sh`.
+</Note>
+
+## Stop (2 hooks)
+
+**Matcher:** `` (fires on every session stop)
+
+When a session ends, these hooks check whether `wiki/` was modified and, if so, instruct the agent to update `wiki/hot.md` before finishing.
+
+<Steps>
+  <Step title="Command hook — detect wiki changes">
+    Checks `git diff --name-only HEAD` for any path starting with `wiki/`. If found, emits a `WIKI_CHANGED` signal:
+
+    ```
+    WIKI_CHANGED: wiki was modified this session. Update wiki/hot.md with a brief summary
+    (under 500 words). Use format: Last Updated, Key Recent Facts, Recent Changes, Active Threads.
+    Keep it factual. Overwrite the file completely.
+    ```
+
+    If the wiki was not modified, the command exits silently via `|| true`.
+  </Step>
+  <Step title="Prompt hook — update hot.md">
+    Injects a prompt instructing the agent to update `wiki/hot.md` if any wiki modifications occurred during the session.
+
+    > "If wiki was modified, update wiki/hot.md before finishing. Include: what was created/modified, key decisions, next steps. Keep it under 500 words. Overwrite completely."
+  </Step>
+</Steps>
+
+## The hot.md Format
+
+The `Stop` hook instructs the agent to write `wiki/hot.md` in a specific format. OpenCode is expected to overwrite the file completely — not append:
+
+```markdown
+---
+title: "Hot Cache"
+updated: 2026-07-02
+---
+
+## Last Updated
+2026-07-02 14:35 UTC
+
+## Key Recent Facts
+- ...
+
+## Recent Changes
+- ...
+
+## Active Threads
+- ...
+```
+
+The four required sections:
+
+| Section | Content |
+|---|---|
+| **Last Updated** | Timestamp of this hot cache write |
+| **Key Recent Facts** | Most important things to remember from recent sessions |
+| **Recent Changes** | Files created or modified this session |
+| **Active Threads** | Open questions, next steps, work in progress |
+
+The target length is **under 500 words** — enough to restore context without consuming the entire context window.
+
+## Why the Double Hook Pattern
+
+Every lifecycle event uses both a `command` and a `prompt` hook. This is deliberate:
+
+- The **command** hook outputs text that appears in the terminal/shell layer before the agent processes it
+- The **prompt** hook injects instructions at the reasoning level after the command runs
+
+Together they ensure that context restoration happens at both layers. Using only one approach risks the agent missing the reload in edge cases.
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="CLI Scripts" href="operations/cli-scripts" icon="terminal">
+    The `wiki-sync.sh` script that the Stop hook delegates commit work to.
+  </Card>
+  <Card title="Knowledge Lifecycle" href="concepts/knowledge-lifecycle" icon="arrow-path">
+    How hot.md fits into the broader knowledge lifecycle.
+  </Card>
+  <Card title="Testing" href="operations/testing" icon="flask">
+    The test suite that validates hook file syntax and structure.
+  </Card>
+  <Card title="Security" href="operations/security" icon="shield">
+    Security considerations for auto-commit hooks and shell execution.
+  </Card>
+</CardGroup>

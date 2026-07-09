@@ -1,47 +1,168 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with Bunker OS in Minutes"
+sidebarTitle: "Quickstart"
+description: "Clone the Bunker OS vault, open it in Obsidian and OpenCode, configure hooks and skills, and run your first autonomous research session."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+Bunker OS is a folder of plain Markdown files that doubles as an OpenCode agent environment. There is no installation wizard, no cloud setup, and no account required — you clone the repository, open it in Obsidian, and point OpenCode at the same directory. The hooks, skills, and scripts are already wired together.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
 
-    ```bash
-    npm install your-package
-    ```
-  </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+### Clone the repository as your vault
 
-    ```bash
-    your-cli init
-    ```
-  </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+The recommended way to use Bunker OS is to clone it directly as your Obsidian vault. This gives you the full repository structure, pre-configured hooks, all 13 skills, the test suite, and the n8n automation layer.
 
-    ```bash
-    your-cli start
-    ```
-  </Step>
-</Steps>
+```bash
+git clone https://github.com/SamBleed/opencode-obsidian.git
+cd opencode-obsidian
+```
+
+Open the folder in Obsidian:
+
+1. Launch Obsidian
+2. Click **Manage Vaults** → **Open folder as vault**
+3. Select the `opencode-obsidian/` directory
+
+Obsidian will load the vault with pre-configured community plugins (Calendar, Thino, Excalidraw, Banners) and CSS snippets already in place. The graph view, dashboard, and canvas layer are all ready to use immediately.
+
+<Note>
+  The `wiki/` directory is gitignored — your personal notes, research, and knowledge pages stay local and never leave your machine.
+</Note>
+
+### Open OpenCode in the same directory
+
+With the vault open in Obsidian, open **OpenCode** in the same `opencode-obsidian/` folder. OpenCode will automatically discover the `hooks/hooks.json` file and register the four lifecycle hooks.
+
+```bash
+# From inside the cloned directory
+opencode
+```
+
+OpenCode detects the following hooks automatically:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [ ... ],
+    "PostCompact":  [ ... ],
+    "PostToolUse":  [ ... ],
+    "Stop":         [ ... ]
+  }
+}
+```
+
+There is nothing to configure. The agent runtime is active the moment OpenCode starts.
+
+### Verify hooks are active
+
+At session start, OpenCode reads `wiki/hot.md` silently to restore recent context. You can confirm the `SessionStart` hook is working by checking the hooks file directly:
+
+```bash
+cat hooks/hooks.json
+```
+
+The `SessionStart` hook runs two actions every time a session opens:
+
+1. **Command** — prints the hot cache to the terminal if `wiki/hot.md` exists
+2. **Prompt** — instructs OpenCode to silently read `wiki/hot.md` to restore context without announcing it
+
+The `Stop` hook detects whether `wiki/` was modified during the session and, if so, prompts OpenCode to update `wiki/hot.md` with a summary of changes — so the next session picks up exactly where this one left off.
 
 <Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
-
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+  Read `wiki/hot.md` at the start of any session where you want to resume previous work. It is a ~500-word summary of the most recent context: current focus, key recent facts, recent changes, and active threads.
 </Tip>
+
+### Run your first commands
+
+With OpenCode running inside `opencode-obsidian/`, you have access to all 13 bundled skills immediately. Start with any of these:
+
+**Autonomous research** — 3-round web research loop that decomposes a topic into angles, searches and fetches sources, cross-references for gaps, and files everything into the wiki:
+
+```
+autoresearch zero-trust architecture
+```
+
+**Wiki query** — reads `wiki/hot.md`, then `wiki/index.md`, drills into relevant pages, and synthesizes an answer from what is actually in the wiki:
+
+```
+what do you know about n8n?
+```
+
+**BM25 text retrieval** — keyword search over wiki pages using the pure-Python BM25 index (no embeddings, no LLM needed for indexing):
+
+```bash
+python3 scripts/retrieve.py "BM25 retrieval"
+```
+
+Here is the full command reference for day-to-day use:
+
+| Command | Action |
+|---|---|
+| `autoresearch [topic]` | 3-round autonomous web research. Decomposes, searches, files |
+| `retrieve [query]` | BM25 text search over wiki (no LLM needed for indexing) |
+| `think [problem]` | 10-principle decision framework |
+| `ingest [file]` | Ingest source: extract entities and concepts, create pages |
+| `ingest all of these` | Batch ingestion with parallel processing |
+| `what do you know about X` | Query the wiki: hot → index → pages → synthesize |
+| `lint the wiki` | Health check: orphans, dead links, gaps |
+| `save this` | Save current conversation as a wiki note |
+| `canvas` | Open or create a visual canvas |
+| `canvas add image [path]` | Add image to canvas |
+
+And the CLI scripts that work independently of OpenCode:
+
+```bash
+make test                              # 430 tests, 5 suites
+./bin/bunker-check.sh                  # Local definition of done
+./bin/wiki-integrity.sh                # Scan for orphans and broken links
+./bin/evidence-index.sh                # Index evidence with SHA256
+python3 scripts/retrieve.py build      # Rebuild BM25 index
+python3 scripts/retrieve.py "query"    # BM25 text retrieval
+```
+
+### Set up n8n automation (optional)
+
+n8n is Bunker OS's async nervous system — it handles webhooks, AI triage, GitHub issue creation, and multi-channel notifications. It runs entirely on Docker and communicates with OpenCode through an MCP bridge.
+
+```bash
+cd automation/n8n-lab
+docker compose up -d
+```
+
+Once running, n8n is available at `http://localhost:5678`. Two workflows are active by default:
+
+- **Health Check** — monitors system status every 5 minutes
+- **Ultimate Alerter** — multi-channel webhook alerts (Slack / Telegram / Discord)
+
+To activate the full AOC v4 Enterprise pipeline (37 nodes, AI triage via OpenRouter, GitHub issue creation), configure the environment variables in `automation/n8n-lab/.env` with your OpenRouter API key, Discord webhook URL, and GitHub credentials, then import and activate `bunker-aoc-v4-enterprise.json` from the n8n UI.
+
+```bash
+# Verify n8n is running
+docker ps --filter name=n8n
+```
+
+</Steps>
+
+## Option 2: Use as a Reference from Another Project
+
+If you already have an OpenCode project and want to point it at Bunker OS as a shared knowledge base without making it your primary vault, add a reference block to your project's `AGENTS.md`:
+
+```markdown
+## Wiki Knowledge Base
+Path: /path/to/opencode-obsidian
+
+When you need context:
+1. Read wiki/hot.md first (recent context)
+2. If not enough, read wiki/index.md
+3. Only then read individual wiki pages
+```
+
+This cross-project pattern means your coding projects, security reviews, and research sessions all draw from the same compounding knowledge base without any duplicate setup.
+
+## Next Steps
+
+Once you have Bunker OS running, the highest-leverage first actions are:
+
+1. **Drop a source into `.raw/`** and run `ingest [filename]` — the skill extracts entities, concepts, and relationships and creates 8–15 cross-referenced wiki pages automatically.
+2. **Run `autoresearch [topic]`** on any domain you work in regularly — it seeds the wiki with well-sourced, cross-referenced pages that all future sessions can build on.
+3. **Run `make test`** once to confirm your environment is healthy — all 430 tests should pass.

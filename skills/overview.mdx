@@ -1,0 +1,129 @@
+---
+title: "OpenCode Skills: 13 Bundled Capabilities for Bunker OS"
+sidebarTitle: "Overview"
+description: "Bunker OS ships with 13 OpenCode skills for autonomous research, wiki management, knowledge retrieval, decision-making, and evidence indexing."
+---
+
+Bunker OS extends OpenCode with 13 bundled skills — markdown files that define agent behavior and are automatically loaded at session start. Each skill is a `SKILL.md` file living under `skills/<name>/`. When a trigger phrase is detected (either an explicit slash command or a natural-language pattern), OpenCode loads the skill's instructions and runs the corresponding workflow against your Obsidian vault.
+
+Skills are not plugins and require no installation step beyond having the repository open in OpenCode. Because they are plain markdown, you can read, fork, and extend them like any other file in the repo.
+
+## The 13 Bundled Skills
+
+| Skill | Trigger phrase | Description |
+|---|---|---|
+| `autoresearch` | `/autoresearch [topic]`, `research [topic]`, `deep dive` | 3-round autonomous web research: decomposes topics, searches via Exa, files sources/concepts/entities to the wiki |
+| `wiki-retrieve` | `/retrieve [query]`, `text search`, `find in vault` | BM25 text retrieval over wiki pages — pure Python stdlib, zero external dependencies |
+| `think` | `/think [problem]`, `think this through`, `structured reasoning` | 10-principle decision framework for architectural choices, audits, and post-mortems |
+| `wiki-ingest` | `ingest [file]`, `ingest all of these`, `add this to the wiki` | Source ingestion with automatic entity and concept extraction; cross-references existing pages |
+| `wiki-query` | `what do you know about X?`, `query:`, `explain`, `summarize` | Wiki-grounded Q&A: reads hot cache → index → pages → synthesizes with citations |
+| `wiki-lint` | `lint the wiki`, `health check`, `find orphans` | Vault health check across 8 categories (orphans, dead links, stale claims, frontmatter gaps) |
+| `save` | `save this`, `/save`, `file this`, `keep this` | Saves the current conversation as a structured wiki note in the correct folder |
+| `wiki` | `/wiki`, `set up wiki`, `scaffold vault` | Wiki orchestrator: bootstraps vault structure, routes to sub-skills, manages hot cache |
+| `canvas` | `/canvas`, `canvas add image [path]`, `canvas new [name]` | Obsidian canvas visual layer — reads and writes canvas JSON, auto-positions nodes |
+| `defuddle` | `defuddle`, `clean this page`, `strip this url` | Web page cleaner using `defuddle-cli`: removes ads/nav/boilerplate, saves 40–60% tokens before ingestion |
+| `evidence-index` | `evidence-index`, `index evidence` | Indexes security audit artifacts (`report.zip`, `security-audit-report.json`) with SHA256 checksums |
+| `obsidian-bases` | *(reference skill)* | Obsidian Bases schema reference for the agent |
+| `obsidian-markdown` | *(reference skill)* | Obsidian Flavored Markdown syntax reference |
+
+## ECC Global Skills
+
+Six additional skills are available when the ECC skill bundle is installed in your OpenCode global config. These are **not bundled** in this repository.
+
+| Skill | Description |
+|---|---|
+| `code-review` | Code quality review |
+| `security-review` | OWASP security review |
+| `infra-design` | Infrastructure design |
+| `tdd-workflow` | TDD with red-green-refactor |
+| `verification-loop` | Build + test + lint + security pre-PR |
+| `work-unit-commits` | Commits organized by work unit |
+
+## How Skills Are Triggered
+
+Skills respond to both explicit slash commands and natural-language trigger phrases defined in each skill's YAML frontmatter. For example, the `autoresearch` skill fires on any of:
+
+```
+/autoresearch [topic]
+autoresearch [topic]
+research [topic]
+deep dive
+find everything about [topic]
+go research
+```
+
+The `think` skill fires on:
+
+```
+/think [problem]
+think this through
+razoná esto
+systematic thinking
+structured reasoning
+```
+
+OpenCode detects these phrases at the start of a turn and loads the matching skill instructions before generating a response.
+
+## MCP Tools Available to Skills
+
+Skills interact with your Obsidian vault and n8n automation layer through two MCP servers configured in `~/.config/opencode/opencode.json`:
+
+**obsidian-vault tools** — pointed at the `wiki/` directory:
+
+| Tool | Purpose |
+|---|---|
+| `obsidian-vault_read_note` | Read an existing wiki page |
+| `obsidian-vault_write_note` | Create or overwrite a wiki page |
+| `obsidian-vault_search_notes` | Full-text search across the vault |
+| `obsidian-vault_patch_note` | Surgical edits without re-reading full pages |
+| `obsidian-vault_list_directory` | List vault directory contents |
+| `obsidian-vault_update_frontmatter` | Update YAML frontmatter fields |
+| `obsidian-vault_get_notes_info` | Retrieve note metadata |
+
+**n8n-mcp** — bridges OpenCode to the n8n Docker automation layer at `localhost:5678` for triggering async workflows, sending alerts, and managing the Dead Letter Queue.
+
+## The SKILL.md Format
+
+Every skill is a single `SKILL.md` file. The format is:
+
+```markdown
+---
+name: skill-name
+description: >
+  One-paragraph description of what the skill does.
+  Triggers on: "phrase 1", "phrase 2", "phrase 3".
+allowed-tools: Read Write Edit Glob Grep Bash WebFetch
+---
+
+# skill-name: Display Title
+
+Prose instructions for the agent...
+
+## Section
+Step-by-step workflow...
+```
+
+The frontmatter `name` and `description` fields are read by OpenCode for skill registration. The `allowed-tools` field restricts which file system operations the skill may use. The body is free-form Markdown that becomes the agent's behavioral instructions for that skill.
+
+## Skill Pages
+
+<CardGroup cols={2}>
+  <Card title="Autoresearch" icon="magnifying-glass" href="/skills/autoresearch">
+    3-round autonomous web research loop with Exa and webfetch, security hygiene, and automatic wiki filing.
+  </Card>
+  <Card title="Wiki Ingest" icon="file-import" href="/skills/wiki-ingest">
+    Ingest raw sources from `.raw/` — extract entities, concepts, and cross-references automatically.
+  </Card>
+  <Card title="Wiki Query" icon="circle-question" href="/skills/wiki-query">
+    Synthesized answers from your knowledge base, grounded in ingested wiki pages — not model training data.
+  </Card>
+  <Card title="Think" icon="brain" href="/skills/think">
+    10-principle cognitive framework for architectural decisions, audits, and post-mortems.
+  </Card>
+  <Card title="Evidence Index" icon="shield-check" href="/skills/evidence-index">
+    SHA256 audit trail for security artifacts — tamper-evident chain of custody for reports and scans.
+  </Card>
+  <Card title="Skills Overview" icon="list" href="/skills/overview">
+    Full reference for all 13 bundled skills and 6 ECC global skills.
+  </Card>
+</CardGroup>

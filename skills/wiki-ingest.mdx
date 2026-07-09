@@ -1,0 +1,173 @@
+---
+title: "Wiki Ingest: Source Ingestion and Knowledge Extraction"
+sidebarTitle: "Wiki Ingest"
+description: "The wiki-ingest skill processes raw sources dropped in .raw/ — extracting entities, concepts, and creating cross-referenced wiki pages automatically."
+---
+
+The `wiki-ingest` skill is the primary intake valve for Bunker OS. Any file, URL, or image you drop into `.raw/` becomes a set of structured wiki pages — one source summary, entity pages for every person/org/product mentioned, concept pages for significant ideas, and updates to the master index, operation log, and hot cache. A single source typically touches **8–15 wiki pages**. The `.raw/` folder is immutable: sources are never modified, only read.
+
+## Trigger Phrases
+
+```
+ingest [file]
+ingest all of these
+process this source
+add this to the wiki
+read and file this
+batch ingest
+ingest this url
+```
+
+## Destination by Source Type
+
+| Resource type | Destination folder | Example |
+|---|---|---|
+| Entity (person, org, product) | `wiki/entities/` | `wiki/entities/OpenRouter.md` |
+| General concept (idea, pattern, framework) | `wiki/concepts/` | `wiki/concepts/BM25.md` |
+| Technical concept | `wiki/concepts/tech-stack/` | `wiki/concepts/tech-stack/PostgreSQL.md` |
+| External source | `wiki/sources/` | `wiki/sources/trivy-security-report.md` |
+
+## Preparing Sources
+
+Drop any of the following into `.raw/` before running `ingest`:
+
+- **Markdown files** — articles, notes, transcripts, documentation exports
+- **URLs** — the skill fetches and optionally cleans with `defuddle` (strips ads and nav, saves 40–60% tokens)
+- **Images** — `.png`, `.jpg`, `.webp`, `.svg`, `.avif`; the skill uses OpenCode's vision capability to OCR and describe the image before ingesting
+- **PDFs** — processed via WebFetch or direct read
+
+For URL ingestion, the skill derives a slug from the URL path, saves the fetched content to `.raw/articles/[slug]-[YYYY-MM-DD].md` with source frontmatter, and proceeds from there. Images are saved to `.raw/images/[slug]-[YYYY-MM-DD].md` as description files, with the original copied to `_attachments/images/`.
+
+## Single Source Ingestion Workflow
+
+<Steps>
+  <Step title="Read the source completely">
+    The skill reads the full source file without skimming. For large sources it checks the manifest at `.raw/.manifest.json` first — if the file hash matches a previously ingested entry, it reports "Already ingested (unchanged)" and stops unless you say `force ingest`.
+  </Step>
+  <Step title="Create source summary in wiki/sources/">
+    A structured summary page is created using the source frontmatter schema. Required fields: `type`, `source_type`, `author`, `date_published`, `url` (if applicable), `confidence` (`high` / `medium` / `low`), and a prose summary of what the source contributes.
+  </Step>
+  <Step title="Create or update entity pages">
+    Every person, organization, product, and repository mentioned in the source gets a page in `wiki/entities/`. The skill checks the index first — if the entity already exists, the page is updated rather than duplicated.
+  </Step>
+  <Step title="Create or update concept pages">
+    Significant ideas, frameworks, and patterns become pages in `wiki/concepts/` or `wiki/concepts/tech-stack/`. Only concepts with enough standalone substance are created; minor mentions are captured in the source summary instead.
+  </Step>
+  <Step title="Update index, hot cache, and log">
+    - `wiki/index.md` — new entries added to the correct sections
+    - `wiki/hot.md` — recent context updated so the next session starts fast
+    - `wiki/log.md` — new entry prepended at the top:
+      ```markdown
+      ## [YYYY-MM-DD] ingest | Source Title
+      - Source: .raw/articles/filename.md
+      - Summary: [[Source Title]]
+      - Pages created: [[Page 1]], [[Page 2]]
+      - Pages updated: [[Page 3]], [[Page 4]]
+      - Key insight: One sentence on what is new.
+      ```
+  </Step>
+  <Step title="Check for contradictions with existing pages">
+    After all pages are created, the skill scans for conflicts with existing wiki content. When a contradiction is found, a `[!contradiction]` callout is added to both the new page and the conflicting existing page — the user decides which claim is authoritative. Old claims are never silently overwritten.
+  </Step>
+</Steps>
+
+## Required Page Frontmatter
+
+Every wiki page created by the ingest skill uses this frontmatter schema:
+
+```markdown
+---
+type: [entity|concept|source]
+title: "Page Title"
+domain: [tech-stack|design|ai|security|etc]
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+tags: []
+status: [active|mature|seed]
+related: []
+sources: []
+---
+
+# Title
+
+## Definition
+[One-line description]
+
+## How It Works
+[Mechanism]
+
+## Example
+```language
+code here
+```
+
+## Source
+- URL or [[wikilink to source]]
+```
+
+For source pages, additional fields are required:
+
+```yaml
+---
+type: source
+source_type: [article|paper|documentation|transcript|report]
+author: "Author Name"
+date_published: YYYY-MM-DD
+url: "https://..."
+confidence: [high|medium|low]
+---
+```
+
+## Batch Ingestion
+
+When you say `ingest all of these`, the skill processes multiple files in sequence with a deferred cross-referencing pass:
+
+1. Lists all files to process and confirms with you before starting
+2. Processes each source following the single-ingest flow, deferring inter-source cross-references
+3. After all sources are processed, runs a cross-reference pass looking for connections *between* the newly ingested sources
+4. Updates `wiki/index.md`, `wiki/hot.md`, and `wiki/log.md` once at the end (not per-source)
+5. Reports: "Processed N sources. Created X pages, updated Y pages. Here are the key connections I found."
+
+For 30+ sources, the skill checks in with you after every 10 processed.
+
+## Delta Tracking
+
+The skill tracks ingested files in `.raw/.manifest.json`:
+
+```json
+{
+  "sources": {
+    ".raw/articles/article-slug-2026-04-08.md": {
+      "hash": "abc123",
+      "ingested_at": "2026-04-08",
+      "pages_created": ["wiki/sources/article-slug.md", "wiki/entities/Person.md"],
+      "pages_updated": ["wiki/index.md"]
+    }
+  }
+}
+```
+
+Before ingesting any file, a hash (`sha256sum` on Linux, `md5sum` otherwise) is computed and checked against the manifest. If the hash matches, the file is skipped. After successful ingestion, the manifest is updated. Use `force ingest` to bypass delta checking.
+
+## Cross-Referencing
+
+The ingest skill uses `[[wikilinks]]` to build a connected knowledge graph:
+
+- Every entity and concept mentioned in a source summary is linked to its wiki page
+- Related pages are added to each new page's `related` frontmatter field
+- Contradiction callouts link bidirectionally between conflicting pages
+- The master `wiki/index.md` serves as the entry point for the entire graph
+
+<Note>
+  The `.raw/` directory is **immutable**. The ingest skill reads from it but never writes to it. Your original source documents always remain in their original state. To re-ingest a modified file, update it in `.raw/` and run `ingest [file]` again — or `force ingest` to bypass the manifest hash check.
+</Note>
+
+## Context Window Discipline
+
+The ingest skill is designed to stay within token budget:
+
+- Reads `wiki/hot.md` first — if it contains relevant context, existing pages are not re-read
+- Reads `wiki/index.md` to find existing pages before creating new ones
+- Reads only 3–5 existing pages per ingest session
+- Uses `obsidian-vault_patch_note` for surgical edits rather than reading and rewriting full files
+- Keeps wiki pages under 100–300 lines; splits pages that grow beyond 300 lines

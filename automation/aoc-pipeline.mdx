@@ -1,0 +1,179 @@
+---
+title: "AOC v4 Enterprise: 37-Node AI Triage Pipeline"
+sidebarTitle: "AOC Pipeline"
+description: "AOC v4 Enterprise routes webhook events through AI triage on OpenRouter, creates GitHub issues, and delivers multi-channel notifications via Slack, Telegram, and Discord."
+---
+
+AOC v4 Enterprise is the flagship automation workflow in Bunker OS. It is a 37-node n8n pipeline that takes an incoming webhook event and walks it through the full operational lifecycle: payload validation, Redis-based deduplication, AI triage via OpenRouter, GitHub issue creation, human-in-the-loop routing for review cases, emergency fast-path for critical events, parallel multi-channel notification delivery, and a final audit write. It ships as **Inactive** — you must configure credentials and activate it manually.
+
+## Full Pipeline
+
+```mermaid
+flowchart TD
+    W[Webhook] --> IG[Ingress Guard]
+    IG --> V{Valid?}
+    V -- No --> RR[Rejected Response]
+    V -- Yes --> RI[Redis Idempotency]
+    RI --> RP{Replay?}
+    RP -- Yes --> CR[Cached Response]
+    RP -- No --> AI["AI Triage (OpenRouter)"]
+    AI --> PD[Parse AI Decision]
+    PD --> CD{Create?}
+    CD -- Create --> GH[GitHub Issue]
+    CD -- Review --> HITL[Issue HITL]
+    CD -- Emergency --> EQ[Emergency Queue]
+    CD -- Duplicate --> SK[Skip]
+    GH --> BN[Build Notification]
+    HITL --> BN
+    EQ --> BN
+    BN --> SL{Slack?}
+    SL -- Yes --> SLY[Send Slack]
+    SL -- No --> SLN[Skip]
+    BN --> TG{Telegram?}
+    TG -- Yes --> TGY[Send Telegram]
+    TG -- No --> TGN[Skip]
+    BN --> DC{Discord?}
+    DC -- Yes --> DCY[Send Discord]
+    DC -- No --> DCN[Skip]
+    SLY & SLN & TGY & TGN & DCY & DCN --> WA[Write Audit]
+    WA --> FS[Final Status]
+```
+
+## Pipeline Stages
+
+Each of the 37 nodes belongs to one of eight functional stages. Understanding the stages helps when debugging a failed execution in the n8n UI.
+
+### 1. Ingress Guard
+
+The first node validates the incoming webhook payload before any processing begins. It checks that required fields are present and that the payload structure is well-formed. Invalid payloads receive a `Rejected Response` immediately — they never reach Redis or the AI triage step.
+
+### 2. Redis Idempotency
+
+Every valid event is checked against a Redis key derived from the event's unique identifier. If the key exists, the event has already been processed and a `Cached Response` is returned without re-executing the pipeline. This prevents duplicate GitHub issues and duplicate notifications when webhooks are replayed.
+
+### 3. AI Triage (OpenRouter)
+
+The core intelligence step. The normalized event payload is sent to OpenRouter, which classifies it into one of four categories:
+
+| Decision | Meaning |
+|---|---|
+| **Create** | A new GitHub issue should be opened |
+| **Review** | The event needs human judgment before action |
+| **Emergency** | Critical event requiring immediate escalation |
+| **Duplicate** | A semantically equivalent issue already exists |
+
+OpenRouter acts as a model router — you can point it at GPT-4o, Claude, or any other model it supports without changing the workflow.
+
+### 4. Parse AI Decision
+
+Extracts the structured decision from the OpenRouter response and routes the execution to the correct downstream branch. This node normalizes model output variations so the branching logic remains stable even if the model changes.
+
+### 5. GitHub Issue Creation
+
+For `Create`-classified events, this node opens a GitHub issue using the configured GitHub credentials. The issue title, body, and labels are populated from the event payload and the AI triage output.
+
+### 6. HITL (Human in the Loop)
+
+For `Review`-classified events, execution is paused and a notification is sent to the configured channel requesting human input before the pipeline continues. The HITL pattern prevents fully automated action on ambiguous or high-stakes events.
+
+### 7. Emergency Queue
+
+For `Emergency`-classified events, the pipeline takes a fast path that bypasses normal queuing and delivers an immediate high-priority alert to all configured notification channels simultaneously.
+
+### 8. Multi-Channel Notifications
+
+After GitHub issue creation, HITL, or Emergency Queue, the pipeline builds a notification payload and fans it out in parallel to up to three channels. Each channel is conditional — if the credential is not configured, that branch is skipped cleanly.
+
+| Channel | Credential Required |
+|---|---|
+| Slack | Slack bot token |
+| Telegram | Telegram bot token + chat ID |
+| Discord | Discord webhook URL |
+
+### 9. Write Audit
+
+Every execution — regardless of which branch was taken — writes a full audit record containing the original event, the AI decision, the GitHub issue URL (if created), and the notification delivery status. This audit trail is queryable in the n8n executions view.
+
+### 10. Final Status
+
+Returns a structured `200 OK` response to the original webhook caller with the execution summary.
+
+## Required Configuration
+
+Before activating AOC v4 Enterprise, configure the following credentials in n8n **Settings → Credentials**:
+
+| Credential | Required | Purpose |
+|---|:---:|---|
+| OpenRouter API key | ✅ Yes | AI triage classification |
+| GitHub credentials | ✅ Yes | Automated issue creation |
+| Discord webhook URL | ✅ Yes | Default notification channel |
+| Redis connection | ✅ Yes | Event deduplication |
+| Slack bot token | ☐ Optional | Slack notifications |
+| Telegram bot token + chat ID | ☐ Optional | Telegram notifications |
+
+<Warning>
+  AOC v4 Enterprise ships as **Inactive**. Do not activate it before configuring all required credentials — the pipeline will fail on the AI Triage node if OpenRouter is not configured, and on the notification nodes if no channel credentials are present.
+</Warning>
+
+## Activating the Workflow
+
+<Steps>
+  <Step title="Configure your .env">
+    Edit `automation/n8n-lab/.env` and add the variable placeholders for your environment. The `.env` file is gitignored — never commit credentials.
+
+    ```bash
+    # Required
+    OPENROUTER_API_KEY=your-openrouter-key
+    GITHUB_TOKEN=ghp_your-github-token
+    DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+
+    # Optional notification channels
+    SLACK_BOT_TOKEN=xoxb-your-slack-token
+    TELEGRAM_BOT_TOKEN=your-telegram-token
+    TELEGRAM_CHAT_ID=your-chat-id
+    ```
+  </Step>
+
+  <Step title="Add credentials in the n8n UI">
+    In n8n go to **Settings → Credentials → Add Credential** and create entries for each service. n8n encrypts these at rest in the credential vault. Reference the credential names in the workflow nodes — the workflow JSON ships with placeholder credential names that you replace at this step.
+  </Step>
+
+  <Step title="Import the workflow JSON">
+    In n8n go to **Workflows → Import from file** and select the AOC v4 Enterprise JSON from `automation/n8n-lab/workflows/`. The workflow will appear in your list as Inactive.
+  </Step>
+
+  <Step title="Activate the Dead Letter Queue first">
+    Before activating AOC v4, activate the **Dead Letter Queue** workflow. The DLQ will catch any errors from AOC v4 during initial testing. See [Dead Letter Queue](/automation/dead-letter-queue) for setup steps.
+  </Step>
+
+  <Step title="Activate AOC v4 Enterprise">
+    Toggle the workflow to **Active** using the switch in the top-right of the workflow editor. n8n will register the webhook URL and the pipeline is now live.
+
+    Test with a sample POST to the webhook URL shown in the Webhook trigger node.
+  </Step>
+</Steps>
+
+## Monitoring Executions
+
+After activating, every incoming webhook creates an execution record in n8n. Access them via **Executions** in the left sidebar. Each execution shows:
+
+- The full input payload
+- Which branch was taken (Create / Review / Emergency / Duplicate)
+- Individual node output at every step
+- Any errors with full stack traces
+
+Failed executions are also captured by the Dead Letter Queue if it is active.
+
+## Related Pages
+
+<CardGroup cols={3}>
+  <Card title="n8n Overview" icon="circle-nodes" href="/automation/n8n-overview">
+    Infrastructure setup, Docker compose, and the full workflow inventory.
+  </Card>
+  <Card title="Dead Letter Queue" icon="triangle-exclamation" href="/automation/dead-letter-queue">
+    Activate the DLQ before AOC v4 to capture errors during setup.
+  </Card>
+  <Card title="MCP Bridge" icon="plug" href="/automation/mcp-bridge">
+    Trigger AOC v4 from OpenCode skills via the n8n MCP bridge.
+  </Card>
+</CardGroup>

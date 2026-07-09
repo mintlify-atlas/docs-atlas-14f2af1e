@@ -1,0 +1,179 @@
+---
+title: "Testing: 430-Test Suite Across 5 Suites with GitHub Actions CI"
+sidebarTitle: "Testing"
+description: "Bunker OS ships with 430 tests across 5 suites — n8n workflow connections, vault integrity, script validation, YAML, and BM25 retrieval — all running on every push via GitHub Actions."
+---
+
+Bunker OS treats testing as a first-class operational concern. The 430-test suite covers every layer of the system: n8n workflow JSON structure, vault file integrity, shell script correctness, YAML configuration validity, and BM25 retrieval functionality. All tests run through a single `Makefile` entry point and execute automatically on every push and pull request to `main` via GitHub Actions.
+
+## Test Suite Overview
+
+| Suite | Tests | What it validates |
+|---|:---:|---|
+| `test-workflows` | 344 | All n8n JSONs parseable, valid connections, no orphans |
+| `test-wiki` | 21 | Essential files exist, valid frontmatter, docker running |
+| `test-scripts` | 61 | Bash syntax, shebang, executables, no secrets, `go vet` |
+| `test-yaml` | 2 | CI and docker-compose YAML valid |
+| `test-retrieve` | 2 | BM25 index exists, search returns results |
+
+## Running Tests
+
+```bash
+# Run all 5 suites (430 tests)
+make test
+
+# Run individual suites
+make test-workflows
+make test-wiki
+make test-scripts
+make test-yaml
+make test-retrieve
+```
+
+The default `make test` target runs the suites in order: `test-yaml → test-workflows → test-wiki → test-scripts → test-retrieve`. All suites must pass for the target to exit with code 0.
+
+```
+🎉 Todas las suites pasaron
+```
+
+## Suite Details
+
+### test-workflows (344 tests)
+
+Uses `tests/test_workflow_connections.py`. This Python script parses every n8n workflow JSON in `automation/n8n-lab/workflows/` and validates:
+
+- Every JSON file is parseable (no syntax errors)
+- All node connections reference nodes that exist within the workflow
+- No orphaned nodes (nodes with no incoming or outgoing connections where connections are expected)
+
+With 37 nodes in the AOC v4 Enterprise workflow alone, plus 4 active workflows, 344 tests cover the full n8n workflow graph.
+
+### test-wiki (21 tests)
+
+Uses `tests/test_wiki_integrity.sh`. This bash script validates the vault's structural health:
+
+<Steps>
+  <Step title="Essential files">
+    Checks that `wiki/hot.md`, `wiki/index.md`, `wiki/log.md`, `BUNKER_RULES.md`, `PROJECT.md`, and `AGENTS.md` all exist.
+  </Step>
+  <Step title="Executable scripts">
+    Confirms that `bin/bunker-check.sh`, `bin/wiki-integrity.sh`, `bin/evidence-index.sh`, `bin/wiki-sync.sh`, and `bin/bunker.sh` all have the executable bit set.
+  </Step>
+  <Step title="Frontmatter validation">
+    Checks that `wiki/hot.md` has `title:` and `updated:` fields. Checks that `wiki/index.md` has `title:` and `updated:` fields.
+  </Step>
+  <Step title="n8n lab">
+    Checks that `automation/n8n-lab/docker-compose.yml` and `automation/n8n-lab/.env` exist. Checks whether the n8n Docker container is running.
+  </Step>
+  <Step title="Skills">
+    Verifies that `skills/autoresearch/SKILL.md` and `skills/wiki-ingest/SKILL.md` exist. Checks that the `skills/` directory contains at least 5 skill subdirectories.
+  </Step>
+</Steps>
+
+### test-scripts (61 tests)
+
+Uses `tests/test_scripts.sh`. This bash script runs five categories of checks against every `.sh` file in `bin/`:
+
+<CardGroup cols={2}>
+  <Card title="Bash Syntax" icon="code">
+    Runs `bash -n` on each script. A syntax error fails the test immediately.
+  </Card>
+  <Card title="Shebang Check" icon="hash">
+    Verifies each script starts with `#!/usr/bin/env bash`, `#!/bin/bash`, or `#!/usr/bin/bash`.
+  </Card>
+  <Card title="Executable Bit" icon="lock-open">
+    Checks that every script has the executable bit set via `-x` test.
+  </Card>
+  <Card title="Secrets Scan" icon="key">
+    Scans for hardcoded secret patterns using `grep -Pq`. See patterns below.
+  </Card>
+</CardGroup>
+
+A fifth category runs `go vet` on any `.go` files found in `bin/`. If `go` is not installed, those tests fail with `go no instalado`.
+
+#### Secrets Patterns Scanned
+
+```bash
+'sk-[a-zA-Z0-9]{20,}'           # OpenAI API keys
+'ghp_[a-zA-Z0-9]{20,}'          # GitHub Personal Access Tokens
+'gho_[a-zA-Z0-9]{20,}'          # GitHub OAuth tokens
+'AKIA[0-9A-Z]{16}'              # AWS Access Key IDs
+'AIza[0-9A-Za-z_-]{20,}'        # Google API keys
+'xox[baprs]-[0-9A-Za-z-]{10,}'  # Slack tokens
+```
+
+If any pattern matches in any script, the test fails and reports the matching pattern. This scan runs on every `make test` invocation — secrets are caught before they can reach a push.
+
+### test-yaml (2 tests)
+
+Validates two YAML configuration files by loading them with Python's `pyyaml`:
+
+```bash
+python3 -c "import yaml; yaml.safe_load(open('.github/workflows/test.yml')); print('  ✅ test.yml valido')"
+python3 -c "import yaml; yaml.safe_load(open('automation/n8n-lab/docker-compose.yml')); print('  ✅ docker-compose.yml valido')"
+```
+
+<Note>
+`pyyaml` is an optional dependency. If it is not installed, `test-yaml` degrades gracefully and prints `⚠️  yaml no disponible (pip install pyyaml)` without failing the overall test run. Install it with `pip install pyyaml` to enable this suite.
+</Note>
+
+### test-retrieve (2 tests)
+
+Validates the BM25 retrieval system with two direct checks:
+
+```bash
+# Test 1: index file exists
+python3 scripts/retrieve.py status > /dev/null 2>&1
+# → ✅ Índice BM25 existe
+
+# Test 2: search returns results
+python3 scripts/retrieve.py "test query búsqueda" --top 2 > /dev/null 2>&1
+# → ✅ Búsqueda BM25 funciona
+```
+
+If the index does not exist, both tests fail. Run `python3 scripts/retrieve.py build` to create it.
+
+## GitHub Actions CI
+
+The `.github/workflows/test.yml` CI workflow runs on every push and pull request targeting `main`. It executes all 5 suites in the same order as `make test`.
+
+The workflow covers:
+- Python 3.10+ (for `test-workflows`, `test-yaml`, `test-retrieve`)
+- Bash 4.0+ (for `test-wiki`, `test-scripts`)
+- Go (for `go vet` in `test-scripts`, optional)
+
+## Secrets Scanning in CI
+
+The secrets scan in `test-scripts` runs on every CI execution. Any hardcoded secret that matches the six patterns above will break the CI build before the code reaches main. This is the primary defense against accidentally committed credentials.
+
+```bash
+# Verify locally before pushing
+make test-scripts
+```
+
+## Extending the Test Suite
+
+To add tests to an existing suite:
+- **test-scripts**: Add checks in `tests/test_scripts.sh` using the `test()` helper function
+- **test-wiki**: Add checks in `tests/test_wiki_integrity.sh` using `check_file_exists` or `check_frontmatter`
+- **test-workflows**: Modify `tests/test_workflow_connections.py`
+- **test-retrieve**: Add assertions in the `test-retrieve` Makefile target
+
+Each `test()` call in the bash test files increments `PASS` or `FAIL` and contributes to the final count.
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="CLI Scripts" href="operations/cli-scripts" icon="terminal">
+    The `bunker-check.sh` script that runs a pre-push health check.
+  </Card>
+  <Card title="BM25 Retrieval" href="operations/bm25-retrieval" icon="magnifying-glass">
+    Details on the BM25 index that `test-retrieve` validates.
+  </Card>
+  <Card title="Security" href="operations/security" icon="shield">
+    How the secrets scan fits into the broader security model.
+  </Card>
+  <Card title="Automation Overview" href="automation/n8n-overview" icon="diagram-project">
+    The n8n workflows validated by the 344-test `test-workflows` suite.
+  </Card>
+</CardGroup>

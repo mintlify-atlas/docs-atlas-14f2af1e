@@ -1,0 +1,91 @@
+---
+title: "Requirements and Dependencies for Bunker OS"
+sidebarTitle: "Requirements"
+description: "Hardware, software, and optional dependencies needed to run Bunker OS — including OpenCode, Obsidian, Python 3.10+, and Docker for n8n."
+---
+
+Bunker OS has a deliberately minimal dependency footprint. The core system — skills, hooks, BM25 retrieval, and wiki management — runs with nothing beyond OpenCode, Obsidian, Python 3.10+, and a POSIX shell. Docker is only required if you want the n8n automation layer. Everything runs locally; there are no cloud services, no telemetry, and no mandatory API keys.
+
+## Required Components
+
+These components must be installed and working before you open the vault:
+
+| Component | Minimum version | Notes |
+|---|---|---|
+| **OpenCode** | latest | [opencode.ai](https://opencode.ai) — the agent runtime for all 13 skills |
+| **Obsidian** | v1.6+ | [obsidian.md](https://obsidian.md) — any modern version; free for personal use |
+| **Python** | 3.10+ | Required for BM25 index and the `retrieve.py` script; stdlib only, no pip dependencies |
+| **Bash** | 4.0+ | Required for all operational scripts in `bin/`; macOS ships Bash 3 — see platform notes below |
+| **Docker** | latest | Required for n8n workflows and automation layer |
+| **Git** | any | For vault versioning and the `PostToolUse` auto-commit hook |
+
+## Optional Dependencies
+
+These are not needed to use the core wiki and skills, but unlock specific capabilities:
+
+- **ollama** — enables local LLM inference via OpenCode if you want to avoid external API calls entirely
+- **n8n on Docker** — required for async automation workflows (Health Check, Dead Letter Queue, AOC v4 Enterprise, Ultimate Alerter)
+- **OpenRouter API key** — required for the AI triage step in the AOC v4 Enterprise pipeline; not needed for any other feature
+- **Go 1.22+** — only required if you need to build or modify `bin/ingest_server.go`; the compiled binary is included
+
+## Obsidian Plugins
+
+### Pre-installed (already in the vault)
+
+These community plugins ship with the repository and are ready to enable in **Settings → Community Plugins**:
+
+| Plugin | Purpose |
+|---|---|
+| **Calendar** | Right-sidebar calendar with daily word count and task dots |
+| **Thino** | Quick memo capture panel for fast, frictionless note capture |
+| **Excalidraw** | Freehand drawing and image annotation for canvas work |
+| **Banners** | Renders header images from `banner:` frontmatter on wiki pages |
+
+<Warning>
+  Excalidraw's main plugin file (`main.js`, ~8MB) is not included in the git repository. If the Excalidraw pane fails to load, you must download it manually or run the setup script: the install guide references `bash bin/setup-vault.sh` which downloads `main.js` automatically.
+</Warning>
+
+### Recommended (install from Community Plugins)
+
+These are not pre-installed but are needed for the dashboard and templating features:
+
+| Plugin | Purpose |
+|---|---|
+| **Dataview** | Powers all dashboard queries; without it, `wiki/meta/dashboard.md` shows no results |
+| **Templater** | Auto-fills frontmatter from `_templates/`; speeds up manual note creation |
+| **Obsidian Git** | Auto-commits the vault every 15 minutes; pairs well with the `PostToolUse` auto-commit hook |
+
+## CSS Snippets
+
+Three CSS snippets are automatically enabled and apply the moment you open the vault:
+
+| Snippet | Effect |
+|---|---|
+| `vault-colors` | Color-codes wiki subdirectories in Obsidian's file explorer for quick visual navigation |
+| `ITS-Dataview-Cards` | Renders Dataview query results as visual card grids rather than plain tables |
+| `ITS-Image-Adjustments` | Enables fine-grained image sizing via pipe syntax — append `\|100` to any embed |
+
+No action is required to activate these — they are placed in `.obsidian/snippets/` and referenced in the vault config.
+
+## Platform Notes
+
+Bunker OS works on all three major platforms, with one important caveat for macOS:
+
+- **Linux** — fully supported; all scripts and workflows tested on Ubuntu/Debian
+- **macOS** — fully supported, but macOS ships with Bash 3.2 (GPL-licensed). Bash 4.0+ features used in `bin/` scripts require upgrading via Homebrew: `brew install bash`
+- **Windows** — supported via WSL (Windows Subsystem for Linux); native Windows batch scripts are not provided. All `bin/*.sh` scripts require a POSIX shell environment
+
+## No Cloud Dependencies
+
+Every component of Bunker OS runs on your local machine:
+
+- The Obsidian vault is a folder of plain Markdown files on your disk
+- n8n runs in Docker on `localhost:5678`
+- The BM25 index is a local file built from your wiki pages
+- The ingest server binds to `127.0.0.1:9090` by default
+- Evidence artifacts are stored and indexed locally with SHA256 checksums
+- No data leaves your machine unless you explicitly configure external webhook integrations (Slack, Telegram, Discord) in n8n
+
+<Info>
+  To sync the vault across devices, use any file sync tool you already trust — Obsidian Sync, Syncthing, iCloud Drive, Dropbox, or a private git remote. The vault is just a folder; any sync method that preserves file contents works.
+</Info>

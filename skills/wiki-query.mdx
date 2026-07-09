@@ -1,0 +1,145 @@
+---
+title: "Wiki Query: Synthesized Answers from Your Knowledge Base"
+sidebarTitle: "Wiki Query"
+description: "The wiki-query skill reads the hot cache, scans the index, drills into relevant pages, and synthesizes answers using OpenCode — citing specific wiki pages, not training data."
+---
+
+The `wiki-query` skill answers questions from what has been explicitly researched and ingested — not from model training data. When you ask *"what do you know about X?"*, the skill follows a deliberate read order designed to minimize token usage while maximizing answer quality: hot cache first, master index second, individual pages only when needed. Every answer is cited to specific wiki pages so you know exactly where the knowledge came from.
+
+This is the fundamental difference between `wiki-query` and asking an LLM directly: answers are grounded in your vault. If a topic hasn't been ingested, the skill says so explicitly rather than hallucinating from general knowledge.
+
+## Trigger Phrases
+
+```
+what do you know about X?
+query: [question]
+query quick: [question]
+query deep: [question]
+what is [concept]?
+explain [topic]
+summarize [topic]
+find in wiki [query]
+based on the wiki, [question]
+```
+
+## Query Modes
+
+The skill offers three depth levels based on the question:
+
+| Mode | Trigger | Reads | Token cost | Best for |
+|---|---|---|---|---|
+| **Quick** | `query quick: ...` or simple factual Q | `hot.md` + `index.md` only | ~1,500 | Date lookups, "what is X?", fast facts |
+| **Standard** | default (no flag) | `hot.md` + `index.md` + 3–5 pages | ~3,000 | Most questions |
+| **Deep** | `query deep: ...` or "thorough", "comprehensive" | Full relevant wiki + optional web | ~8,000+ | Comparisons, synthesis across many pages |
+
+## The Read Order
+
+<Tip>
+  The read order is optimized for cost. `wiki/hot.md` is a ~500-word rolling summary of recent session context — it often contains the answer with no further reads needed. `wiki/index.md` is the master catalog with one-line descriptions of every page. Only if index descriptions aren't sufficient does the skill open individual pages.
+</Tip>
+
+<Steps>
+  <Step title="Read wiki/hot.md">
+    The hot cache is always read first. It contains the most recent context (~500 words), including recently ingested sources, key facts, active research threads, and recent changes. If it answers the question, the skill responds immediately without reading further.
+  </Step>
+  <Step title="Read wiki/index.md">
+    The master index contains titles and one-line descriptions for every wiki page, organized into sections (Domains, Entities, Concepts, Sources, Questions). The skill scans section headers first to identify which sections are relevant, then reads those entries to find the best 3–5 pages to drill into.
+  </Step>
+  <Step title="Read relevant pages (Standard mode)">
+    Up to 3–5 individual wiki pages are opened. The skill follows wikilinks to depth-2 for key entities but does not go deeper. Token discipline: reading 10+ pages is reserved for deep mode only.
+  </Step>
+  <Step title="Synthesize with citations">
+    The answer is synthesized and presented in chat with wikilink citations: `(Source: [[Page Name]])`. The skill never presents training-data knowledge as wiki knowledge — if a topic is in the wiki, it says so; if it isn't, it says that too.
+  </Step>
+  <Step title="Offer to file the answer">
+    After synthesis, the skill offers: *"This analysis seems worth keeping. Should I save it as wiki/questions/answer-name.md?"* Good answers that took significant synthesis effort are worth filing back into the wiki so they compound for future sessions.
+  </Step>
+</Steps>
+
+## How Answers Are Cited
+
+Every non-obvious claim in a query answer is cited with a wikilink to the specific wiki page it came from:
+
+```
+BM25 is the same ranking algorithm used by Elasticsearch.
+(Source: [[concepts/BM25]])
+
+The n8n Dead Letter Queue persists the last 200 errors in staticData.
+(Source: [[sources/n8n-dlq-architecture]])
+```
+
+This citation model means you can verify any claim by opening the linked page — and that page will contain the original source URL or reference.
+
+## When the Skill Says "I Don't Know"
+
+If a topic cannot be answered from the wiki, the skill says so explicitly:
+
+> *"I don't have enough in the wiki to answer this well. I have nothing on [subtopic]. Want to find a source? I can help you search or process one."*
+
+This is not a limitation of the model — it means the topic hasn't been ingested yet. The correct response is to run `autoresearch [topic]` or `ingest [source]` to add the knowledge, then query again.
+
+<Note>
+  **Do not fabricate.** The wiki-query skill is explicitly instructed not to answer domain-specific questions from training data when the question is about your specific operational context. If it's not in the wiki, it doesn't exist in the Bunker's knowledge base — yet.
+</Note>
+
+## Combining with BM25 Retrieval
+
+For broad queries where you're not sure which pages are relevant, combine `wiki-retrieve` with `wiki-query`:
+
+```bash
+# Step 1: Find relevant chunks via BM25 (no LLM needed)
+retrieve n8n docker automation
+
+# Step 2: Synthesize the answer from the returned pages
+what do you know about n8n automation?
+```
+
+The `retrieve` command runs `python3 scripts/retrieve.py "[query]" --top 5` and returns ranked page chunks. The query command then reads those pages and synthesizes. BM25 is deterministic (same query = same results), fast, and runs entirely locally without embedding calls or API keys.
+
+## Filing Answers Back
+
+When a query produces a high-quality synthesis, it should be saved back into the wiki so future sessions can access it at index-read cost rather than re-deriving it. The skill uses this frontmatter for filed answers:
+
+```yaml
+---
+type: question
+title: "Short descriptive title"
+question: "The exact query as asked."
+answer_quality: solid
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+tags: [question, domain]
+related:
+  - "[[Page referenced in answer]]"
+sources:
+  - "[[wiki/sources/relevant-source.md]]"
+status: developing
+---
+```
+
+After filing, an entry is added to `wiki/index.md` under Questions and appended to `wiki/log.md`.
+
+## Related Skills
+
+**wiki-lint** — run `lint the wiki` to run a health check across 8 categories:
+
+1. Orphan pages (no inbound links)
+2. Dead wikilinks (link targets that don't exist)
+3. Stale claims (assertions contradicted by newer sources)
+4. Missing pages (entities mentioned in multiple pages but lacking their own page)
+5. Missing cross-references (entities mentioned but not linked)
+6. Frontmatter gaps (missing required fields)
+7. Empty sections (headings with no content)
+8. Stale index entries (items pointing to renamed or deleted pages)
+
+The lint report is written to `wiki/meta/lint-report-YYYY-MM-DD.md`. Run it after every 10–15 ingests or weekly.
+
+**save** — run `save this` or `/save` to save the current conversation as a structured wiki note. The skill analyzes the session, determines the correct note type (`synthesis`, `concept`, `source`, `decision`, or `session`), writes the page to the correct folder, and updates the index, log, and hot cache. Variants:
+
+```
+/save                         — save the most valuable content from this session
+/save [name]                  — save with a specific note title
+/save session                 — save a complete session summary
+/save concept [name]          — explicitly save as a concept page
+/save decision [name]         — explicitly save as an ADR in wiki/meta/
+```
